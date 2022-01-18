@@ -1,0 +1,3 @@
+[submodule "applications/microservices-demo"]
+	path = applications/microservices-demo
+	url = https://github.com/dyn-tracing/microservices-demo
