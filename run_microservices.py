@@ -161,6 +161,10 @@ def get_gateway_info(platform):
 
     return ingress_host, ingress_port, gateway_url
 
+def jaeger_all_in_one():
+    cmd = f"{APPLY_CMD} https://raw.githubusercontent.com/istio/istio/release-1.12/samples/addons/jaeger.yaml"
+    result = util.exec_process(cmd)
+    return result
 
 ################### APPLICATION SPECIFIC FUNCTIONS ###########################
 
@@ -216,6 +220,8 @@ def main(args):
         return remove_application(args.application)
     if args.clean:
         return stop_kubernetes(args.platform)
+    if args.jaeger_all:
+        return jaeger_all_in_one()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -273,6 +279,11 @@ if __name__ == '__main__':
                         dest="remove_application",
                         action="store_true",
                         help="remove the app. ")
+    parser.add_argument("-ja",
+                        "--jaeger-all-in-one",
+                        dest="jaeger_all",
+                        action="store_true",
+                        help="Deploys Jaeger with the all in one strategy.  Then Jaeger is available via 'istioctl dashboard jaeger'")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
