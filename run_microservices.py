@@ -41,7 +41,7 @@ CONFIG_MATRIX = {
         'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh" 
     },
     'OB': {
-        'minikube_startup_command': None # online boutique with necessary memory adjustments is too big for Minikube
+        'minikube_startup_command': None, # online boutique with necessary memory adjustments is too big for Minikube
         'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=7  --machine-type e2-highmem-4 ",
         'deploy_cmd': f"{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/release  ",
@@ -201,7 +201,6 @@ def setup_application_deployment(platform, multizonal, application):
     result = inject_istio()
     if result != util.EXIT_SUCCESS:
         return result
-    print("injected istio")
     result = deploy_application(application)
     if result != util.EXIT_SUCCESS:
         return result
