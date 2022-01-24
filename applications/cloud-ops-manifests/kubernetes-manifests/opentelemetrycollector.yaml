@@ -47,9 +47,10 @@ spec:
       # This gateway container will receive trace information from one or more microservices
       # and forward it to Cloud Trace
       - name: otel-gateway
-        args:
+        command:
+        - "/otelcontribcol"
         - --config=/conf/collector-gateway-config.yaml
-        image: otel/opentelemetry-collector-contrib:0.28.0
+        image: otel/opentelemetry-collector-contrib:latest
         volumeMounts:
         - name: collector-gateway-config
           mountPath: /conf
@@ -96,9 +97,17 @@ data:
       googlecloud:
         project: {{PROJECT_ID}}
       logging:
+      googlecloudpubsub:
+      googlecloudpubsub/dyntrace:
+        project: dynamic-tracing
+        endpoint: test-endpoint
+        user_agent: opentelemetry-collector-contrib:0.42.0
+        insecure: true
+        timeout: 20s
+        topic: projects/dynamic-tracing/topics/otlp-topic
     service:
       pipelines:
         traces:
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: []
-          exporters: [googlecloud, logging] # Export directly to Google Cloud
+          exporters: [googlecloud, logging, googlecloudpubsub/dyntrace] # Export directly to Google Cloud
