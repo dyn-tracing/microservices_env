@@ -1,0 +1,19 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+
+processors:
+
+exporters:
+  logging:
+  googlecloudpubsub:
+
+service:
+  pipelines:
+    traces:
+      receivers:
+      - otlp
+      processors:
+      exporters:
+      - googlecloudpubsub
