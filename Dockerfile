@@ -20,5 +20,6 @@ USER root
 
 RUN  mkdir /go/pkg/mod/cache/vcs
 RUN builder --config custom_opentelemetry_collector/docker_builder.yaml
-ENTRYPOINT ["tail", "-f", "/dev/null"]
+ENTRYPOINT ["/var/folders/vj/smckm_qs4052kd93p4zybytr0000gn/T/otelcol-distribution2816830151"]
+CMD ["--config", "custom_opentelemetry_collector/example.yaml"]
 EXPOSE 4317 55680 55679
