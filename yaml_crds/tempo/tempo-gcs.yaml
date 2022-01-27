@@ -15,7 +15,7 @@ distributor:
         http:
         grpc:
     opencensus:
-# some values have been lowered for fast testing
+
 ingester:
   trace_idle_period: 10s               # the length of time after a trace has not received spans to consider it complete and flush it
   max_block_bytes: 1           # cut the head block when it hits this size or ...
