@@ -1,11 +1,11 @@
-module github.com/jesswberg/custom_collector
+module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter
 
 go 1.17
 
 require (
 	github.com/stretchr/testify v1.7.0
-	go.opentelemetry.io/collector v0.42.0
-	go.opentelemetry.io/collector/model v0.42.0
+	go.opentelemetry.io/collector v0.43.1
+	go.opentelemetry.io/collector/model v0.43.1
 	go.uber.org/zap v1.20.0
 
 )
