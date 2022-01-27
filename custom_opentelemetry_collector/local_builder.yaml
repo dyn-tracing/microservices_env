@@ -1,6 +1,6 @@
 exporters:
   - gomod: "github.com/jesswberg/splitbatchprocessor v0.0.0"
-    path: "/Users/jessicaberg/Documents/Tracing/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter"
+    path: "/Users/jessicaberg/Documents/Tracing/microservices_env/custom_opentelemetry_collector"
   - import: go.opentelemetry.io/collector/exporter/loggingexporter
     gomod: go.opentelemetry.io/collector v0.42.0
 
