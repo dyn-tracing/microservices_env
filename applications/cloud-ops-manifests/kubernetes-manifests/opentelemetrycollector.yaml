@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50,9 +49,14 @@ spec:
         args:
         - --config=/conf/collector-gateway-config.yaml
         image: jessberg/custom_otel_collector:latest 
+        env:
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: /var/secrets/google/key.json
         volumeMounts:
         - name: collector-gateway-config
           mountPath: /conf
+        - name: google-cloud-key
+          mountPath: /var/secrets/google
       volumes:
       # Simple ConfigMap volume with template file
       - name: collector-gateway-config-template
@@ -64,6 +68,9 @@ spec:
       # Create a volume to store the expanded template (with correct cloud project ID)
       - name: collector-gateway-config
         emptyDir: {}
+      - name: google-cloud-key
+        secret:
+          secretName: pubsub-key
 ---
 apiVersion: v1
 kind: Service
@@ -96,13 +103,18 @@ data:
       googlecloud:
         project: {{PROJECT_ID}}
       logging:
-      #googlecloudpubsub:
-      #  project: {{PROJECT_ID}}
-      #  topic: otlp-traces
+      googlecloudpubsub:
+        project: {{PROJECT_ID}}
+        topic: projects/dynamic-tracing/topics/otlp-topic
+      googlecloudpubsub/customname:
+        project: dynamic-tracing
+        user_agent: opentelemetry-collector-contrib {{version}}
+        insecure: true
+        timeout: 20s
+        topic: projects/dynamic-tracing/topics/otlp-topic
     service:
       pipelines:
         traces:
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: []
-          exporters: [logging] # Export directly to Google Cloud
-          #exporters: [logging, googlecloudpubsub] # Export directly to Google Cloud
+          exporters: [logging, googlecloudpubsub, googlecloudpubsub/customname] # Export directly to Google Cloud
