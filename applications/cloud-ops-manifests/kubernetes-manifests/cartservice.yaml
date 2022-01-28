@@ -60,7 +60,7 @@ spec:
             command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=5s"]
       # Add a 'sidecar' container running the OpenTelemetry collector
       - name: otel-agent
-        image: otel/opentelemetry-collector-contrib:latest
+        image: otel/opentelemetry-collector-contrib:0.28.0
         args:
         - --config=/conf/otel-agent-config.yaml
         volumeMounts:
