@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package googlecloudpubsubexporter
+package googlecloudstorageexporter
 
 import (
 	"path"
@@ -53,30 +53,13 @@ func TestLoadConfig(t *testing.T) {
 	customConfig.TimeoutSettings = exporterhelper.TimeoutSettings{
 		Timeout: 20 * time.Second,
 	}
-	customConfig.Topic = "projects/my-project/topics/otlp-topic"
 	customConfig.Compression = "gzip"
-	customConfig.Watermark.Behavior = "earliest"
-	customConfig.Watermark.AllowedDrift = time.Hour
 	assert.Equal(t, cfg.Exporters[config.NewComponentIDWithName(typeStr, "customname")], customConfig)
-}
-
-func TestTopicConfigValidation(t *testing.T) {
-	factory := NewFactory()
-	c := factory.CreateDefaultConfig().(*Config)
-	assert.Error(t, c.validate())
-	c.Topic = "projects/000project/topics/my-topic"
-	assert.Error(t, c.validate())
-	c.Topic = "projects/my-project/subscriptions/my-subscription"
-	assert.Error(t, c.validate())
-	c.Topic = "projects/my-project/topics/my-topic"
-	assert.NoError(t, c.validate())
 }
 
 func TestCompressionConfigValidation(t *testing.T) {
 	factory := NewFactory()
 	c := factory.CreateDefaultConfig().(*Config)
-	c.Topic = "projects/my-project/topics/my-topic"
-	assert.NoError(t, c.validate())
 	c.Compression = "xxx"
 	assert.Error(t, c.validate())
 	c.Compression = "gzip"
@@ -84,20 +67,5 @@ func TestCompressionConfigValidation(t *testing.T) {
 	c.Compression = "none"
 	assert.Error(t, c.validate())
 	c.Compression = ""
-	assert.NoError(t, c.validate())
-}
-
-func TestWatermarkBehaviorConfigValidation(t *testing.T) {
-	factory := NewFactory()
-	c := factory.CreateDefaultConfig().(*Config)
-	c.Topic = "projects/my-project/topics/my-topic"
-	assert.NoError(t, c.validate())
-	c.Watermark.Behavior = "xxx"
-	assert.Error(t, c.validate())
-	c.Watermark.Behavior = "earliest"
-	assert.NoError(t, c.validate())
-	c.Watermark.Behavior = "none"
-	assert.Error(t, c.validate())
-	c.Watermark.Behavior = "current"
 	assert.NoError(t, c.validate())
 }
