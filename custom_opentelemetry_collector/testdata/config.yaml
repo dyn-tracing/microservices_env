@@ -19,5 +19,5 @@ service:
     traces:
         receivers: [nop]
         processors: [nop]
-        exporters: [googlecloudstorage]
+        exporters: [googlecloudstorage/customname]
 

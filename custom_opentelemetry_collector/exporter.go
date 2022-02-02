@@ -119,13 +119,13 @@ func (ex *storageExporter) publishMessage(ctx context.Context, encoding Encoding
 		}
 	}
     bkt := ex.client.Bucket("dyn-tracing-example")
-    if err := bkt.Create(ctx, "dynamic-tracing", nil); err != nil { // TODO: dynamically get project name
-        // TODO: handle error
-    }
-    obj := bkt.Object("bucket-name"+id.String())
+    obj := bkt.Object("obj-name"+id.String())
     w := obj.NewWriter(ctx)
-    if _, err := fmt.Fprintf(w, string(data)); err != nil {
-        // TODO: handle error
+    if _, err := fmt.Fprintf(w, "here's the data"); err != nil {
+		return fmt.Errorf("failed creating the object: %w", err)
+    }
+    if err := w.Close(); err != nil {
+		return fmt.Errorf("failed closing the object: %w", err)
     }
     /*
 	_, err = ex.client.Publish(ctx, &pubsubpb.PublishRequest{
