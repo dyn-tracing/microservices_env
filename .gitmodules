@@ -4,3 +4,6 @@
 [submodule "applications/train-ticket"]
 	path = applications/train-ticket
 	url = git@github.com:dyn-tracing/train-ticket.git
+[submodule "trace_storage"]
+	path = trace_storage
+	url = git@github.com:dyn-tracing/trace_storage.git

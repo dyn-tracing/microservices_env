@@ -1,0 +1,23 @@
+receivers:
+  nop:
+
+processors:
+  nop:
+
+exporters:
+  googlecloudstorage:
+  googlecloudstorage/customname:
+    project: my-project
+    endpoint: test-endpoint
+    user_agent: opentelemetry-collector-contrib {{version}}
+    insecure: true
+    timeout: 20s
+    compression: gzip
+
+service:
+  pipelines:
+    traces:
+        receivers: [nop]
+        processors: [nop]
+        exporters: [googlecloudstorage/customname]
+
