@@ -12,75 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package googlecloudpubsubexporter
+package googlecloudstorageexporter
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"cloud.google.com/go/pubsub/pstest"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.uber.org/zap/zaptest"
-	"google.golang.org/api/option"
-	pb "google.golang.org/genproto/googleapis/pubsub/v1"
 )
 
 func TestName(t *testing.T) {
-	exporter := &pubsubExporter{}
-	assert.Equal(t, "googlecloudpubsub", exporter.Name())
-}
-
-func TestGenerateClientOptions(t *testing.T) {
-	// Start a fake server running locally.
-	srv := pstest.NewServer()
-	defer srv.Close()
-	exporter := &pubsubExporter{
-		instanceName: "dummy",
-		logger:       zaptest.NewLogger(t),
-		userAgent:    "test-user-agent",
-
-		config: &Config{
-			Endpoint:  srv.Addr,
-			Insecure:  true,
-			ProjectID: "my-project",
-		},
-	}
-	options := exporter.generateClientOptions()
-	assert.Equal(t, option.WithUserAgent("test-user-agent"), options[0])
-
-	exporter.config.Insecure = false
-	options = exporter.generateClientOptions()
-	assert.Equal(t, option.WithUserAgent("test-user-agent"), options[0])
-	assert.Equal(t, option.WithEndpoint(srv.Addr), options[1])
+	exporter := &storageExporter{}
+	assert.Equal(t, "googlecloudstorage", exporter.Name())
 }
 
 func TestExporterDefaultSettings(t *testing.T) {
 	ctx := context.Background()
 	// Start a fake server running locally.
-	srv := pstest.NewServer()
-	defer srv.Close()
-	_, err := srv.GServer.CreateTopic(ctx, &pb.Topic{
-		Name: "projects/my-project/topics/otlp",
-	})
-	assert.NoError(t, err)
 
-	exporter := &pubsubExporter{
+	exporter := &storageExporter{
 		instanceName: "dummy",
 		logger:       zaptest.NewLogger(t),
 		userAgent:    "test-user-agent",
 
 		config: &Config{
-			Endpoint:  srv.Addr,
+			Endpoint:  "127.0.0.1",
 			Insecure:  true,
 			ProjectID: "my-project",
 			TimeoutSettings: exporterhelper.TimeoutSettings{
 				Timeout: 12 * time.Second,
 			},
 		},
-		topicName: "projects/my-project/topics/otlp",
 	}
 	assert.NoError(t, exporter.start(ctx, nil))
 	assert.NoError(t, exporter.consumeTraces(ctx, pdata.NewTraces()))
@@ -92,27 +58,20 @@ func TestExporterDefaultSettings(t *testing.T) {
 func TestExporterCompression(t *testing.T) {
 	ctx := context.Background()
 	// Start a fake server running locally.
-	srv := pstest.NewServer()
-	defer srv.Close()
-	_, err := srv.GServer.CreateTopic(ctx, &pb.Topic{
-		Name: "projects/my-project/topics/otlp",
-	})
-	assert.NoError(t, err)
 
-	exporter := &pubsubExporter{
+	exporter := &storageExporter{
 		instanceName: "dummy",
 		logger:       zaptest.NewLogger(t),
 		userAgent:    "test-user-agent",
 
 		config: &Config{
-			Endpoint:  srv.Addr,
+			Endpoint:  "127.0.0.1",
 			Insecure:  true,
 			ProjectID: "my-project",
 			TimeoutSettings: exporterhelper.TimeoutSettings{
 				Timeout: 12 * time.Second,
 			},
 		},
-		topicName:     "projects/my-project/topics/otlp",
 		ceCompression: GZip,
 	}
 	assert.NoError(t, exporter.start(ctx, nil))

@@ -1,9 +1,9 @@
-module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter
+module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudstorageexporter
 
 go 1.17
 
 require (
-	cloud.google.com/go/pubsub v1.17.1
+	cloud.google.com/go/storage v1.10.0
 	github.com/google/uuid v1.3.0
 	github.com/stretchr/testify v1.7.0
 	go.opentelemetry.io/collector v0.42.0
@@ -19,8 +19,6 @@ require (
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.3.0 // indirect
-	github.com/cespare/xxhash/v2 v2.1.2 // indirect
-	github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4 // indirect
 	github.com/cncf/xds/go v0.0.0-20211130200136-a8f946100490 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/envoyproxy/go-control-plane v0.10.1 // indirect
@@ -51,6 +49,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	golang.org/x/sys v0.0.0-20211210111614-af8b64212486 // indirect
 	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

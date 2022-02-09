@@ -48,7 +48,7 @@ spec:
       - name: otel-gateway
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/custom_otel_collector:latest 
+        image: jessberg/cloudstoragecollector:latest 
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: /var/secrets/google/key.json
@@ -103,18 +103,18 @@ data:
       googlecloud:
         project: {{PROJECT_ID}}
       logging:
-      googlecloudpubsub:
+      googlecloudstorage:
         project: {{PROJECT_ID}}
-        topic: projects/dynamic-tracing/topics/otlp-topic
-      googlecloudpubsub/customname:
+        #topic: projects/dynamic-tracing/topics/otlp-topic
+      googlecloudstorage/customname:
         project: dynamic-tracing
         user_agent: opentelemetry-collector-contrib {{version}}
         insecure: true
         timeout: 20s
-        topic: projects/dynamic-tracing/topics/otlp-topic
+        #topic: projects/dynamic-tracing/topics/otlp-topic
     service:
       pipelines:
         traces:
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: []
-          exporters: [logging, googlecloudpubsub, googlecloudpubsub/customname] # Export directly to Google Cloud
+          exporters: [logging, googlecloudstorage, googlecloudstorage/customname] # Export directly to Google Cloud

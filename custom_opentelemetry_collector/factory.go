@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package googlecloudpubsubexporter // import "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter"
+package googlecloudstorageexporter // import "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudstorageexporter"
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 
 const (
 	// The value of "type" key in configuration.
-	typeStr        = "googlecloudpubsub"
+	typeStr        = "googlecloudstorage"
 	defaultTimeout = 12 * time.Second
 )
 
@@ -43,36 +43,24 @@ func NewFactory() component.ExporterFactory {
 		exporterhelper.WithLogs(createLogsExporter))
 }
 
-var exporters = map[*Config]*pubsubExporter{}
+var exporters = map[*Config]*storageExporter{}
 
-func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *pubsubExporter {
+func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *storageExporter {
 	receiver := exporters[pCfg]
 	if receiver != nil {
 		return receiver
 	}
-	receiver = &pubsubExporter{
+	receiver = &storageExporter{
 		instanceName:     pCfg.ID().Name(),
 		logger:           params.Logger,
 		userAgent:        strings.ReplaceAll(pCfg.UserAgent, "{{version}}", params.BuildInfo.Version),
 		ceSource:         fmt.Sprintf("/opentelemetry/collector/%s/%s", name, params.BuildInfo.Version),
 		config:           pCfg,
-		topicName:        pCfg.Topic,
 		tracesMarshaler:  otlp.NewProtobufTracesMarshaler(),
 		metricsMarshaler: otlp.NewProtobufMetricsMarshaler(),
 		logsMarshaler:    otlp.NewProtobufLogsMarshaler(),
 	}
 	receiver.ceCompression, _ = pCfg.parseCompression()
-	watermarkBehavior, _ := pCfg.Watermark.parseWatermarkBehavior()
-	switch watermarkBehavior {
-	case Earliest:
-		receiver.tracesWatermarkFunc = earliestTracesWatermark
-		receiver.metricsWatermarkFunc = earliestMetricsWatermark
-		receiver.logsWatermarkFunc = earliestLogsWatermark
-	case Current:
-		receiver.tracesWatermarkFunc = currentTracesWatermark
-		receiver.metricsWatermarkFunc = currentMetricsWatermark
-		receiver.logsWatermarkFunc = currentLogsWatermark
-	}
 	exporters[pCfg] = receiver
 	return receiver
 }
@@ -92,18 +80,18 @@ func createTracesExporter(
 	cfg config.Exporter) (component.TracesExporter, error) {
 
 	pCfg := cfg.(*Config)
-	pubsubExporter := ensureExporter(set, pCfg)
+	storageExporter := ensureExporter(set, pCfg)
 
 	return exporterhelper.NewTracesExporter(
 		cfg,
 		set,
-		pubsubExporter.consumeTraces,
+		storageExporter.consumeTraces,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(pCfg.TimeoutSettings),
 		exporterhelper.WithRetry(pCfg.RetrySettings),
 		exporterhelper.WithQueue(pCfg.QueueSettings),
-		exporterhelper.WithStart(pubsubExporter.start),
-		exporterhelper.WithShutdown(pubsubExporter.shutdown),
+		exporterhelper.WithStart(storageExporter.start),
+		exporterhelper.WithShutdown(storageExporter.shutdown),
 	)
 }
 
@@ -113,17 +101,17 @@ func createMetricsExporter(
 	cfg config.Exporter) (component.MetricsExporter, error) {
 
 	pCfg := cfg.(*Config)
-	pubsubExporter := ensureExporter(set, pCfg)
+	storageExporter := ensureExporter(set, pCfg)
 	return exporterhelper.NewMetricsExporter(
 		cfg,
 		set,
-		pubsubExporter.consumeMetrics,
+		storageExporter.consumeMetrics,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(pCfg.TimeoutSettings),
 		exporterhelper.WithRetry(pCfg.RetrySettings),
 		exporterhelper.WithQueue(pCfg.QueueSettings),
-		exporterhelper.WithStart(pubsubExporter.start),
-		exporterhelper.WithShutdown(pubsubExporter.shutdown),
+		exporterhelper.WithStart(storageExporter.start),
+		exporterhelper.WithShutdown(storageExporter.shutdown),
 	)
 }
 
@@ -133,17 +121,17 @@ func createLogsExporter(
 	cfg config.Exporter) (component.LogsExporter, error) {
 
 	pCfg := cfg.(*Config)
-	pubsubExporter := ensureExporter(set, pCfg)
+	storageExporter := ensureExporter(set, pCfg)
 
 	return exporterhelper.NewLogsExporter(
 		cfg,
 		set,
-		pubsubExporter.consumeLogs,
+		storageExporter.consumeLogs,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(pCfg.TimeoutSettings),
 		exporterhelper.WithRetry(pCfg.RetrySettings),
 		exporterhelper.WithQueue(pCfg.QueueSettings),
-		exporterhelper.WithStart(pubsubExporter.start),
-		exporterhelper.WithShutdown(pubsubExporter.shutdown),
+		exporterhelper.WithStart(storageExporter.start),
+		exporterhelper.WithShutdown(storageExporter.shutdown),
 	)
 }
