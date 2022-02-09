@@ -121,7 +121,7 @@ func (ex *storageExporter) publishMessage(ctx context.Context, encoding Encoding
     bkt := ex.client.Bucket("dyn-tracing-example")
     obj := bkt.Object("obj-name"+id.String())
     w := obj.NewWriter(ctx)
-    if _, err := fmt.Fprintf(w, "here's the data"); err != nil {
+    if _, err := fmt.Fprintf(w, string(data)); err != nil {
 		return fmt.Errorf("failed creating the object: %w", err)
     }
     if err := w.Close(); err != nil {
