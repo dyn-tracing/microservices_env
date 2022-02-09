@@ -21,7 +21,6 @@ import (
 	"fmt"
 
     storage "cloud.google.com/go/storage"
-	"github.com/google/uuid"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
@@ -88,56 +87,56 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) publishMessage(ctx context.Context, encoding Encoding, data []byte) error {
-	id, err := uuid.NewRandom()
-	if err != nil {
-		return err
-	}
+func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
+    // bucket will be service name
+    bkt := ex.client.Bucket(serviceName)
+    _, err := bkt.Attrs(ctx)
+    if err == storage.ErrBucketNotExist {
+        if err := bkt.Create(ctx, ex.config.ProjectID, nil); err != nil {
+            return fmt.Errorf("failed creating bucket: %w", err)
+        }
+    }
+    if err != nil {
+        return fmt.Errorf("failed getting bucket attributes: %w", err)
+    }
+    return err
+}
 
-	attributes := map[string]string{
-		"ce-specversion": "1.0",
-		"ce-id":          id.String(),
-		"ce-source":      ex.ceSource,
-	}
-	switch encoding {
-	case OtlpProtoTrace:
-		attributes["ce-type"] = "org.opentelemetry.otlp.traces.v1"
-		attributes["content-type"] = "application/protobuf"
-	case OtlpProtoMetric:
-		attributes["ce-type"] = "org.opentelemetry.otlp.metrics.v1"
-		attributes["content-type"] = "application/protobuf"
-	case OtlpProtoLog:
-		attributes["ce-type"] = "org.opentelemetry.otlp.logs.v1"
-		attributes["content-type"] = "application/protobuf"
-	}
+func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string) error {
+    var err error
+
+    // TODO:  figure out compression
+    /*
 	switch ex.ceCompression {
 	case GZip:
-		attributes["content-encoding"] = "gzip"
-		data, err = ex.compress(data)
+    	data, err = ex.compress(data)
 		if err != nil {
 			return err
 		}
 	}
-    bkt := ex.client.Bucket("dyn-tracing-example")
-    obj := bkt.Object("obj-name"+id.String())
-    w := obj.NewWriter(ctx)
-    if _, err := fmt.Fprintf(w, string(data)); err != nil {
-		return fmt.Errorf("failed creating the object: %w", err)
-    }
-    if err := w.Close(); err != nil {
-		return fmt.Errorf("failed closing the object: %w", err)
-    }
-    /*
-	_, err = ex.client.Publish(ctx, &pubsubpb.PublishRequest{
-		Topic: ex.topicName,
-		Messages: []*pubsubpb.PubsubMessage{
-			{
-				Attributes: attributes,
-				Data:       data,
-			},
-		},
-	})
     */
+
+    // bucket will be service name
+    bkt := ex.client.Bucket(serviceName)
+
+    // object will be span ID
+    obj := bkt.Object(spanID)
+    _, err = obj.Attrs(ctx)
+    if err == storage.ErrObjectNotExist {
+        w := obj.NewWriter(ctx)
+        if _, err := w.Write(data.buf.Bytes()); err != nil {
+            return fmt.Errorf("failed creating the object: %w", err)
+        }
+        if err := w.Close(); err != nil {
+            return fmt.Errorf("failed closing the object: %w", err)
+        }
+    }
+    if err != nil {
+        return fmt.Errorf("failed getting object attributes: %w", err)
+    }
+    if err == nil {
+        return fmt.Errorf("span ID collision")
+    }
 	return err
 }
 
@@ -160,25 +159,55 @@ func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
 }
 
 func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
-	buffer, err := ex.tracesMarshaler.MarshalTraces(traces)
-	if err != nil {
-		return err
+    // citation:  stole the structure of this code from https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/honeycombexporter/honeycomb.go and from https://github.com/open-telemetry/opentelemetry-collector/blob/0afea3faaac826d9b122046c68dbaae1e2a64ff5/internal/otlptext/traces.go#L29
+    var err error
+	rss := traces.ResourceSpans()
+	for i := 0; i < rss.Len(); i++ {
+		rs := rss.At(i)
+        // TODO: the resource attributes are currently ignored bc I'm not really sure what they are or how they fit in
+		ilss := rs.InstrumentationLibrarySpans()
+		for j := 0; j < ilss.Len(); j++ {
+			ils := ilss.At(j)
+            // Buffer is created here because at this point, all the spans are from the same instrumentation library.
+            // So this is essentially the same trace point
+			spans := ils.Spans()
+			for k := 0; k < spans.Len(); k++ {
+                buf := dataBuffer{}
+				buf.logEntry("Span #%d", k)
+				span := spans.At(k)
+				buf.logAttr("Trace ID", span.TraceID().HexString())
+				buf.logAttr("Parent ID", span.ParentSpanID().HexString())
+				buf.logAttr("ID", span.SpanID().HexString())
+				buf.logAttr("Name", span.Name())
+                name := span.Name()
+				buf.logAttr("Kind", span.Kind().String())
+				buf.logAttr("Start time", span.StartTimestamp().String())
+				buf.logAttr("End time", span.EndTimestamp().String())
+
+				buf.logAttr("Status code", span.Status().Code().String())
+				buf.logAttr("Status message", span.Status().Message())
+
+				buf.logAttributeMap("Attributes", span.Attributes())
+				buf.logEvents("Events", span.Events())
+				buf.logLinks("Links", span.Links())
+                if k == 0 {
+                    ex.spanBucketExists(ctx, name)
+                }
+                return ex.publishSpan(ctx, buf, name, span.SpanID().HexString())
+			}
+		}
 	}
-	return ex.publishMessage(ctx, OtlpProtoTrace, buffer)
+    return err
+
 }
 
+// TODO:  get rid of these functions
 func (ex *storageExporter) consumeMetrics(ctx context.Context, metrics pdata.Metrics) error {
-	buffer, err := ex.metricsMarshaler.MarshalMetrics(metrics)
-	if err != nil {
-		return err
-	}
-	return ex.publishMessage(ctx, OtlpProtoMetric, buffer)
+	_, err := ex.metricsMarshaler.MarshalMetrics(metrics)
+    return err
 }
 
 func (ex *storageExporter) consumeLogs(ctx context.Context, logs pdata.Logs) error {
-	buffer, err := ex.logsMarshaler.MarshalLogs(logs)
-	if err != nil {
-		return err
-	}
-	return ex.publishMessage(ctx, OtlpProtoLog, buffer)
+	_, err := ex.logsMarshaler.MarshalLogs(logs)
+    return err
 }
