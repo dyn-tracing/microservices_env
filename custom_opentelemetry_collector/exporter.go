@@ -19,6 +19,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+    "strings"
 
     storage "cloud.google.com/go/storage"
 	"go.opentelemetry.io/collector/component"
@@ -89,7 +90,11 @@ func (ex *storageExporter) shutdown(context.Context) error {
 
 func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
     // bucket will be service name
-    bkt := ex.client.Bucket(serviceName)
+    // TODO: is this the best way to get it into a format for bucket names?
+    bucketID := strings.ReplaceAll(serviceName, ".", "")
+    bucketID = strings.ReplaceAll(bucketID, "/", "")
+    bucketID = strings.ToLower(bucketID)
+    bkt := ex.client.Bucket(bucketID)
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
         if err := bkt.Create(ctx, ex.config.ProjectID, nil); err != nil {
@@ -117,10 +122,22 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     */
 
     // bucket will be service name
-    bkt := ex.client.Bucket(serviceName)
+    bucketID := strings.ReplaceAll(serviceName, ".", "")
+    bucketID = strings.ReplaceAll(bucketID, "/", "")
+    bucketID = strings.ToLower(bucketID)
+    bkt := ex.client.Bucket(bucketID)
 
     // object will be span ID
     obj := bkt.Object(spanID)
+    w := obj.NewWriter(ctx)
+    if _, err := w.Write(data.buf.Bytes()); err != nil {
+        return fmt.Errorf("failed creating the object: %w", err)
+    }
+    if err := w.Close(); err != nil {
+        return fmt.Errorf("failed closing the object: %w", err)
+    }
+
+    /*
     _, err = obj.Attrs(ctx)
     if err == storage.ErrObjectNotExist {
         w := obj.NewWriter(ctx)
@@ -137,6 +154,7 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     if err == nil {
         return fmt.Errorf("span ID collision")
     }
+    */
 	return err
 }
 
@@ -190,6 +208,7 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 				buf.logAttributeMap("Attributes", span.Attributes())
 				buf.logEvents("Events", span.Events())
 				buf.logLinks("Links", span.Links())
+                // bufPointer := &buf.buf
                 if k == 0 {
                     ex.spanBucketExists(ctx, name)
                 }
