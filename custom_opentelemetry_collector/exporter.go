@@ -29,6 +29,7 @@ import (
 )
 
 const name = "googlecloudstorage"
+const trace_bucket = "traces"
 
 type storageExporter struct {
 	instanceName         string
@@ -77,6 +78,7 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 	ex.tracesMarshaler = otlp.NewProtobufTracesMarshaler()
 	ex.metricsMarshaler = otlp.NewProtobufMetricsMarshaler()
 	ex.logsMarshaler = otlp.NewProtobufLogsMarshaler()
+    ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
 	return nil
 }
 
@@ -93,6 +95,8 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
     // TODO: is this the best way to get it into a format for bucket names?
     bucketID := strings.ReplaceAll(serviceName, ".", "")
     bucketID = strings.ReplaceAll(bucketID, "/", "")
+    bucketID = strings.ReplaceAll(bucketID, "google", "")
+    bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
     bkt := ex.client.Bucket(bucketID)
     _, err := bkt.Attrs(ctx)
@@ -107,7 +111,7 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
     return err
 }
 
-func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string) error {
+func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string, traceID string) error {
     var err error
 
     // TODO:  figure out compression
@@ -124,8 +128,11 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     // bucket will be service name
     bucketID := strings.ReplaceAll(serviceName, ".", "")
     bucketID = strings.ReplaceAll(bucketID, "/", "")
+    bucketID = strings.ReplaceAll(bucketID, "google", "")
+    bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
     bkt := ex.client.Bucket(bucketID)
+    ex.spanBucketExists(ctx, bucketID)
 
     // object will be span ID
     obj := bkt.Object(spanID)
@@ -134,27 +141,25 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
         return fmt.Errorf("failed creating the object: %w", err)
     }
     if err := w.Close(); err != nil {
-        return fmt.Errorf("failed closing the object: %w", err)
+        return fmt.Errorf("failed closing the span object in bucket %s: %w", bucketID, err)
     }
 
+    // now make sure to add it to the trace bucket
+    // we know that trace bucket for sure already exists bc of the start function
     /*
-    _, err = obj.Attrs(ctx)
-    if err == storage.ErrObjectNotExist {
-        w := obj.NewWriter(ctx)
-        if _, err := w.Write(data.buf.Bytes()); err != nil {
-            return fmt.Errorf("failed creating the object: %w", err)
-        }
-        if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the object: %w", err)
-        }
+    trace_bkt := ex.client.Bucket(trace_bucket)
+    ex.spanBucketExists(ctx, trace_bucket)
+    trace_obj := trace_bkt.Object(traceID+serviceName)
+    // TODO:  this is not robust to the same service being called twice in a trace
+    w_trace := trace_obj.NewWriter(ctx)
+    if _, err := w_trace.Write([]byte(spanID)); err != nil {
+        return fmt.Errorf("failed creating the object: %w", err)
     }
-    if err != nil {
-        return fmt.Errorf("failed getting object attributes: %w", err)
-    }
-    if err == nil {
-        return fmt.Errorf("span ID collision")
+    if err := w_trace.Close(); err != nil {
+        return fmt.Errorf("failed closing the trace object %s: %w", traceID+serviceName, err)
     }
     */
+    // we aren't sure if trace object exists or not yet
 	return err
 }
 
@@ -197,7 +202,7 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 				buf.logAttr("Parent ID", span.ParentSpanID().HexString())
 				buf.logAttr("ID", span.SpanID().HexString())
 				buf.logAttr("Name", span.Name())
-                name := span.Name()
+                spanName := span.Name()
 				buf.logAttr("Kind", span.Kind().String())
 				buf.logAttr("Start time", span.StartTimestamp().String())
 				buf.logAttr("End time", span.EndTimestamp().String())
@@ -208,11 +213,11 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 				buf.logAttributeMap("Attributes", span.Attributes())
 				buf.logEvents("Events", span.Events())
 				buf.logLinks("Links", span.Links())
-                // bufPointer := &buf.buf
                 if k == 0 {
-                    ex.spanBucketExists(ctx, name)
+                    ex.spanBucketExists(ctx, spanName)
+                    ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
                 }
-                return ex.publishSpan(ctx, buf, name, span.SpanID().HexString())
+                return ex.publishSpan(ctx, buf, spanName, span.SpanID().HexString(), span.TraceID().HexString())
 			}
 		}
 	}

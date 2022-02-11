@@ -99,17 +99,14 @@ data:
     processors:                                                                 
     exporters:                                                                  
       logging:                                                                  
-        loglevel:
-          debug
       googlecloudstorage:                                                       
-        project: {{PROJECT_ID}}                                                 
-        #topic: projects/dynamic-tracing/topics/otlp-topic                      
+        #project: {{PROJECT_ID}} TODO:  does this work with {{PROJECT_ID}}?
+        project: dynamic-tracing
       googlecloudstorage/customname:                                            
         project: dynamic-tracing                                                
         user_agent: opentelemetry-collector-contrib {{version}}                 
         insecure: true                                                          
         timeout: 20s                                                            
-        #topic: projects/dynamic-tracing/topics/otlp-topic                      
     service:                                                                    
       pipelines:                                                                
         traces:                                                                 

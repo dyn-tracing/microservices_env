@@ -5,18 +5,18 @@ extensions:
     gomod: go.opentelemetry.io/collector v0.43.1
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/asapauthextension v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/awsproxy v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.43.0
+  #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/fluentbitextension v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/httpforwarder v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/hostobserver v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/k8sobserver v0.43.0
+  #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/k8sobserver v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oidcauthextension v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage v0.43.0
-    import: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage
+  #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage v0.43.0
+  #  import: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage
 
 exporters:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter v0.0.0"
@@ -41,7 +41,7 @@ exporters:
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/elasticsearchexporter v0.43.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/f5cloudexporter v0.43.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.43.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/honeycombexporter v0.43.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/humioexporter v0.43.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/influxdbexporter v0.43.0
@@ -69,23 +69,23 @@ exporters:
 processors:
   - import: go.opentelemetry.io/collector/processor/batchprocessor
     gomod: go.opentelemetry.io/collector v0.43.1
-  - import: go.opentelemetry.io/collector/processor/memorylimiterprocessor
-    gomod: go.opentelemetry.io/collector v0.43.1
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbytraceprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricsgenerationprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.43.0
+#  - import: go.opentelemetry.io/collector/processor/memorylimiterprocessor
+#    gomod: go.opentelemetry.io/collector v0.43.1
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbytraceprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricsgenerationprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/probabilisticsamplerprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/routingprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/spanmetricsprocessor v0.43.0
-  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/spanprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/routingprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/spanmetricsprocessor v0.43.0
+#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/spanprocessor v0.43.0
   #- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/tailsamplingprocessor v0.43.0
 
 receivers:

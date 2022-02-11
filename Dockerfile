@@ -14,8 +14,6 @@ COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 
 RUN go install go.opentelemetry.io/collector/cmd/builder@latest
 
-#ARG USER_UID=10001
-#USER ${USER_UID}
 USER root
 
 RUN  mkdir /go/pkg/mod/cache/vcs
