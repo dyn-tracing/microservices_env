@@ -29,7 +29,7 @@ import (
 )
 
 const name = "googlecloudstorage"
-const trace_bucket = "traces"
+const trace_bucket = "dyntraces"
 
 type storageExporter struct {
 	instanceName         string
@@ -146,9 +146,10 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
 
     // now make sure to add it to the trace bucket
     // we know that trace bucket for sure already exists bc of the start function
-    /*
+    //trace_bkt := ex.client.Bucket(trace_bucket)
     trace_bkt := ex.client.Bucket(trace_bucket)
     ex.spanBucketExists(ctx, trace_bucket)
+    
     trace_obj := trace_bkt.Object(traceID+serviceName)
     // TODO:  this is not robust to the same service being called twice in a trace
     w_trace := trace_obj.NewWriter(ctx)
@@ -158,7 +159,6 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     if err := w_trace.Close(); err != nil {
         return fmt.Errorf("failed closing the trace object %s: %w", traceID+serviceName, err)
     }
-    */
     // we aren't sure if trace object exists or not yet
 	return err
 }
