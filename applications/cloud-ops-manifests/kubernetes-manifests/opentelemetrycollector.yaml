@@ -48,7 +48,7 @@ spec:
       - name: otel-gateway
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/cloudstoragecollector:latest 
+        image: jessberg/cloudstoragepermicroservicecollector:latest
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: /var/secrets/google/key.json
