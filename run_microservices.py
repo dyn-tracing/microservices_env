@@ -22,7 +22,7 @@ ISTIO_DIR = TOOLS_DIR.joinpath("istio-1.12.1")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 YAML_DIR = FILE_DIR.joinpath("yaml_crds")
 
-ONLINE_BOUTIQUE_DIR = APP_DIR.joinpath("opentelemetry-microservices-demo")
+ONLINE_BOUTIQUE_DIR = APP_DIR.joinpath("microservices-demo")
 TRAIN_TICKET_DIR = APP_DIR.joinpath("train-ticket/deployment/kubernetes-manifests/k8s-with-istio")
 
 PROJECT_ID = "dynamic-tracing"
