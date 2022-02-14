@@ -15,45 +15,56 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: productcatalogservice
+  name: cartservice
 spec:
   selector:
     matchLabels:
-      app: productcatalogservice
+      app: cartservice
   template:
     metadata:
       labels:
-        app: productcatalogservice
+        app: cartservice
     spec:
+      serviceAccountName: default
       terminationGracePeriodSeconds: 5
       containers:
-      - name: productcatalogservice
-        image: gcr.io/stackdriver-sandbox-230822/sandbox/productcatalogservice:v0.7.5
+      - name: server
+        image: docker.io/jessberg/cartservice:1.0.0
         ports:
-        - containerPort: 3550
-        readinessProbe:
-          exec:
-            command: ["/bin/grpc_health_probe", "-addr=:3550"]
-        livenessProbe:
-          exec:
-            command: ["/bin/grpc_health_probe", "-addr=:3550"]
+        - containerPort: 7070
+        env:
+        - name: REDIS_ADDR
+          value: "redis-cart:6379"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=cartservice,service.version=1.0.0"
         resources:
           requests:
-            cpu: 100m
+            cpu: 200m
             memory: 64Mi
           limits:
-            cpu: 200m
+            cpu: 300m
             memory: 128Mi
+        readinessProbe:
+          initialDelaySeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=5s"]
+        livenessProbe:
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=5s"]
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: productcatalogservice
+  name: cartservice
 spec:
   type: ClusterIP
   selector:
-    app: productcatalogservice
+    app: cartservice
   ports:
   - name: grpc
-    port: 3550
-    targetPort: 3550
+    port: 7070
+    targetPort: 7070

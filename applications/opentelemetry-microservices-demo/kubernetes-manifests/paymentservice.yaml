@@ -15,23 +15,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: shippingservice
+  name: paymentservice
 spec:
   selector:
     matchLabels:
-      app: shippingservice
+      app: paymentservice
   template:
     metadata:
       labels:
-        app: shippingservice
+        app: paymentservice
     spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
       containers:
-      - name: shippingservice
-        image: gcr.io/stackdriver-sandbox-230822/sandbox/shippingservice:v0.7.5
+      - name: server
+        image: docker.io/jessberg/paymentservice:1.0.0
         ports:
         - containerPort: 50051
+        env:
+        - name: PORT
+          value: "50051"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=paymentservice,service.version=1.0.0"
         readinessProbe:
-          periodSeconds: 5
           exec:
             command: ["/bin/grpc_health_probe", "-addr=:50051"]
         livenessProbe:
@@ -48,11 +56,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: shippingservice
+  name: paymentservice
 spec:
   type: ClusterIP
   selector:
-    app: shippingservice
+    app: paymentservice
   ports:
   - name: grpc
     port: 50051

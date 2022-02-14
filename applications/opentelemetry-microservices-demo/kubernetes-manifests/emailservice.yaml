@@ -15,42 +15,55 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: recommendationservice
+  name: emailservice
 spec:
   selector:
     matchLabels:
-      app: recommendationservice
+      app: emailservice
   template:
     metadata:
       labels:
-        app: recommendationservice
+        app: emailservice
     spec:
+      serviceAccountName: default
       terminationGracePeriodSeconds: 5
       containers:
-      - name: recommendationservice
-        image: gcr.io/stackdriver-sandbox-230822/sandbox/recommendationservice:v0.7.5
+      - name: server
+        image: docker.io/jessberg/emailservice:1.0.0
         ports:
         - containerPort: 8080
         env:
-        - name: PRODUCT_CATALOG_SERVICE_ADDR
-          value: "productcatalogservice:3550"
+        - name: PORT
+          value: "8080"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=emailservice,service.version=1.0.0"
+        readinessProbe:
+          periodSeconds: 5
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+        livenessProbe:
+          periodSeconds: 5
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
         resources:
           requests:
             cpu: 100m
-            memory: 220Mi
+            memory: 64Mi
           limits:
             cpu: 200m
-            memory: 450Mi
+            memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: recommendationservice
+  name: emailservice
 spec:
   type: ClusterIP
   selector:
-    app: recommendationservice
+    app: emailservice
   ports:
   - name: grpc
-    port: 8080
+    port: 5000
     targetPort: 8080

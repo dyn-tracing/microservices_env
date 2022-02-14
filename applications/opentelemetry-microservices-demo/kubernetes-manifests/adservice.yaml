@@ -15,46 +15,57 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: currencyservice
+  name: adservice
 spec:
   selector:
     matchLabels:
-      app: currencyservice
+      app: adservice
   template:
     metadata:
       labels:
-        app: currencyservice
+        app: adservice
     spec:
+      serviceAccountName: default
       terminationGracePeriodSeconds: 5
       containers:
-      - name: currencyservice
-        image: gcr.io/stackdriver-sandbox-230822/sandbox/currencyservice:v0.7.5
+      - name: server
+        image: docker.io/jessberg/adservice:1.0.0
         ports:
-        - name: grpc
-          containerPort: 7000
-        readinessProbe:
-          exec:
-            command: ["/bin/grpc_health_probe", "-addr=:7000"]
-        livenessProbe:
-          exec:
-            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+        - containerPort: 9555
+        env:
+        - name: PORT
+          value: "9555"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=adservice,service.version=1.0.0"
         resources:
           requests:
-            cpu: 100m
-            memory: 64Mi
+            cpu: 400m
+            memory: 360Mi
           limits:
-            cpu: 200m
-            memory: 128Mi
+            cpu: 600m
+            memory: 600Mi
+        readinessProbe:
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+        livenessProbe:
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: currencyservice
+  name: adservice
 spec:
   type: ClusterIP
   selector:
-    app: currencyservice
+    app: adservice
   ports:
   - name: grpc
-    port: 7000
-    targetPort: 7000
+    port: 9555
+    targetPort: 9555

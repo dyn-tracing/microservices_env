@@ -24,10 +24,13 @@ spec:
     metadata:
       labels:
         app: frontend
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
     spec:
+      serviceAccountName: default
       containers:
-        - name: frontend
-          image: gcr.io/stackdriver-sandbox-230822/sandbox/frontend:v0.7.5
+        - name: server
+          image: docker.io/jessberg/frontend:1.0.0
           ports:
           - containerPort: 8080
           readinessProbe:
@@ -47,6 +50,8 @@ spec:
               - name: "Cookie"
                 value: "shop_session-id=x-liveness-probe"
           env:
+          - name: PORT
+            value: "8080"
           - name: PRODUCT_CATALOG_SERVICE_ADDR
             value: "productcatalogservice:3550"
           - name: CURRENCY_SERVICE_ADDR
@@ -61,15 +66,23 @@ spec:
             value: "checkoutservice:5050"
           - name: AD_SERVICE_ADDR
             value: "adservice:9555"
-          - name: RATING_SERVICE_ADDR
-            value: "http://some.host"
+          - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+            value: "http://otelcollector:4317"
+          - name: OTEL_RESOURCE_ATTRIBUTES
+            value: "service.name=frontend,service.version=1.0.0"
+          # # ENV_PLATFORM: One of: local, gcp, aws, azure, onprem, alibaba
+          # # When not set, defaults to "local" unless running in GKE, otherwies auto-sets to gcp 
+          # - name: ENV_PLATFORM 
+          #   value: "aws"
+          # - name: CYMBAL_BRANDING
+          #   value: "true"
           resources:
             requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
               cpu: 200m
               memory: 128Mi
-            limits:
-              cpu: 320m
-              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service

@@ -15,30 +15,36 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: emailservice
+  name: shippingservice
 spec:
   selector:
     matchLabels:
-      app: emailservice
+      app: shippingservice
   template:
     metadata:
       labels:
-        app: emailservice
+        app: shippingservice
     spec:
-      terminationGracePeriodSeconds: 5
+      serviceAccountName: default
       containers:
-      - name: emailservice
-        image: gcr.io/stackdriver-sandbox-230822/sandbox/emailservice:v0.7.5
+      - name: server
+        image: docker.io/jessberg/shippingservice:1.0.0
         ports:
-        - containerPort: 8080
+        - containerPort: 50051
+        env:
+        - name: PORT
+          value: "50051"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=shippingservice,service.version=1.0.0"
         readinessProbe:
           periodSeconds: 5
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+            command: ["/bin/grpc_health_probe", "-addr=:50051"]
         livenessProbe:
-          periodSeconds: 5
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+            command: ["/bin/grpc_health_probe", "-addr=:50051"]
         resources:
           requests:
             cpu: 100m
@@ -50,12 +56,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: emailservice
+  name: shippingservice
 spec:
   type: ClusterIP
   selector:
-    app: emailservice
+    app: shippingservice
   ports:
   - name: grpc
-    port: 5000
-    targetPort: 8080
+    port: 50051
+    targetPort: 50051
