@@ -22,4 +22,5 @@ By default, this runs on Minikube.  To run on Google Cloud Platform, run with th
 
 The collector by default stores traces within Cloud Storage.
 
-
+### Other Notes
+The version of Online Boutique in this repository is found here:  https://github.com/julianocosta89/opentelemetry-microservices-demo.  It was edited only to allow it to run the kubernetes manifests independently through giving it absolute image names instead of relative.
