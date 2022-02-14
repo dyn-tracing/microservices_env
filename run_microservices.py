@@ -41,7 +41,7 @@ CONFIG_MATRIX = {
         'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh" 
     },
     'OB': {
-        'minikube_startup_command': None, # online boutique with necessary memory adjustments is too big for Minikube
+        'minikube_startup_command': "minikube start --cpus=4 --memory 4096 --disk-size 32g", # online boutique with necessary memory adjustments is too big for Minikube
         'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json && \

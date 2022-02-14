@@ -78,7 +78,7 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 	ex.tracesMarshaler = otlp.NewProtobufTracesMarshaler()
 	ex.metricsMarshaler = otlp.NewProtobufMetricsMarshaler()
 	ex.logsMarshaler = otlp.NewProtobufLogsMarshaler()
-    ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
+    ex.spanBucketExists(ctx, trace_bucket)
 	return nil
 }
 
@@ -90,15 +90,19 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
-    // bucket will be service name
+func (ex *storageExporter) serviceNameToBucketName(ctx context.Context, serviceName string) string {
     // TODO: is this the best way to get it into a format for bucket names?
+    // There is probably a more robust way
     bucketID := strings.ReplaceAll(serviceName, ".", "")
     bucketID = strings.ReplaceAll(bucketID, "/", "")
     bucketID = strings.ReplaceAll(bucketID, "google", "")
     bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
-    bkt := ex.client.Bucket(bucketID)
+    return bucketID
+}
+
+func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
+    bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, serviceName))
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
         if err := bkt.Create(ctx, ex.config.ProjectID, nil); err != nil {
@@ -126,11 +130,7 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     */
 
     // bucket will be service name
-    bucketID := strings.ReplaceAll(serviceName, ".", "")
-    bucketID = strings.ReplaceAll(bucketID, "/", "")
-    bucketID = strings.ReplaceAll(bucketID, "google", "")
-    bucketID = strings.ReplaceAll(bucketID, "_", "")
-    bucketID = strings.ToLower(bucketID)
+    bucketID := ex.serviceNameToBucketName(ctx, serviceName)
     bkt := ex.client.Bucket(bucketID)
     ex.spanBucketExists(ctx, bucketID)
 
