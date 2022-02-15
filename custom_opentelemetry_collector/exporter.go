@@ -22,6 +22,7 @@ import (
     "strings"
 
     storage "cloud.google.com/go/storage"
+    conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
@@ -187,38 +188,40 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 	rss := traces.ResourceSpans()
 	for i := 0; i < rss.Len(); i++ {
 		rs := rss.At(i)
-        // TODO: the resource attributes are currently ignored bc I'm not really sure what they are or how they fit in
-		ilss := rs.InstrumentationLibrarySpans()
-		for j := 0; j < ilss.Len(); j++ {
-			ils := ilss.At(j)
-            // Buffer is created here because at this point, all the spans are from the same instrumentation library.
-            // So this is essentially the same trace point
-			spans := ils.Spans()
-			for k := 0; k < spans.Len(); k++ {
-                buf := dataBuffer{}
-				buf.logEntry("Span #%d", k)
-				span := spans.At(k)
-				buf.logAttr("Trace ID", span.TraceID().HexString())
-				buf.logAttr("Parent ID", span.ParentSpanID().HexString())
-				buf.logAttr("ID", span.SpanID().HexString())
-				buf.logAttr("Name", span.Name())
-                spanName := span.Name()
-				buf.logAttr("Kind", span.Kind().String())
-				buf.logAttr("Start time", span.StartTimestamp().String())
-				buf.logAttr("End time", span.EndTimestamp().String())
+        r := rs.Resource()
 
-				buf.logAttr("Status code", span.Status().Code().String())
-				buf.logAttr("Status message", span.Status().Message())
+        // TODO:  somehow incorporate resource attrs
 
-				buf.logAttributeMap("Attributes", span.Attributes())
-				buf.logEvents("Events", span.Events())
-				buf.logLinks("Links", span.Links())
-                if k == 0 {
-                    ex.spanBucketExists(ctx, spanName)
-                    ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
+		if serviceName, ok := r.Attributes().Get(conventions.AttributeServiceName); ok {
+            ex.spanBucketExists(ctx, serviceName.StringVal())
+            ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
+            ilss := rs.InstrumentationLibrarySpans()
+            for j := 0; j < ilss.Len(); j++ {
+                ils := ilss.At(j)
+                // Buffer is created here because at this point, all the spans are from the same instrumentation library.
+                // So this is essentially the same trace point
+                spans := ils.Spans()
+                for k := 0; k < spans.Len(); k++ {
+                    buf := dataBuffer{}
+                    buf.logEntry("Span #%d", k)
+                    span := spans.At(k)
+                    buf.logAttr("Trace ID", span.TraceID().HexString())
+                    buf.logAttr("Parent ID", span.ParentSpanID().HexString())
+                    buf.logAttr("ID", span.SpanID().HexString())
+                    buf.logAttr("Name", span.Name())
+                    buf.logAttr("Kind", span.Kind().String())
+                    buf.logAttr("Start time", span.StartTimestamp().String())
+                    buf.logAttr("End time", span.EndTimestamp().String())
+
+                    buf.logAttr("Status code", span.Status().Code().String())
+                    buf.logAttr("Status message", span.Status().Message())
+
+                    buf.logAttributeMap("Attributes", span.Attributes())
+                    buf.logEvents("Events", span.Events())
+                    buf.logLinks("Links", span.Links())
+                    return ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString(), span.TraceID().HexString())
                 }
-                return ex.publishSpan(ctx, buf, spanName, span.SpanID().HexString(), span.TraceID().HexString())
-			}
+            }
 		}
 	}
     return err
