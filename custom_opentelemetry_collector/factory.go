@@ -33,14 +33,12 @@ const (
 	defaultTimeout = 12 * time.Second
 )
 
-// NewFactory creates a factory for Google Cloud Pub/Sub exporter.
+// NewFactory creates a factory for Google Cloud Storage exporter.
 func NewFactory() component.ExporterFactory {
 	return exporterhelper.NewFactory(
 		typeStr,
 		createDefaultConfig,
-		exporterhelper.WithTraces(createTracesExporter),
-		exporterhelper.WithMetrics(createMetricsExporter),
-		exporterhelper.WithLogs(createLogsExporter))
+		exporterhelper.WithTraces(createTracesExporter))
 }
 
 var exporters = map[*Config]*storageExporter{}
@@ -57,8 +55,6 @@ func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *stor
 		ceSource:         fmt.Sprintf("/opentelemetry/collector/%s/%s", name, params.BuildInfo.Version),
 		config:           pCfg,
 		tracesMarshaler:  otlp.NewProtobufTracesMarshaler(),
-		metricsMarshaler: otlp.NewProtobufMetricsMarshaler(),
-		logsMarshaler:    otlp.NewProtobufLogsMarshaler(),
 	}
 	receiver.ceCompression, _ = pCfg.parseCompression()
 	exporters[pCfg] = receiver
@@ -95,43 +91,3 @@ func createTracesExporter(
 	)
 }
 
-func createMetricsExporter(
-	_ context.Context,
-	set component.ExporterCreateSettings,
-	cfg config.Exporter) (component.MetricsExporter, error) {
-
-	pCfg := cfg.(*Config)
-	storageExporter := ensureExporter(set, pCfg)
-	return exporterhelper.NewMetricsExporter(
-		cfg,
-		set,
-		storageExporter.consumeMetrics,
-		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
-		exporterhelper.WithTimeout(pCfg.TimeoutSettings),
-		exporterhelper.WithRetry(pCfg.RetrySettings),
-		exporterhelper.WithQueue(pCfg.QueueSettings),
-		exporterhelper.WithStart(storageExporter.start),
-		exporterhelper.WithShutdown(storageExporter.shutdown),
-	)
-}
-
-func createLogsExporter(
-	_ context.Context,
-	set component.ExporterCreateSettings,
-	cfg config.Exporter) (component.LogsExporter, error) {
-
-	pCfg := cfg.(*Config)
-	storageExporter := ensureExporter(set, pCfg)
-
-	return exporterhelper.NewLogsExporter(
-		cfg,
-		set,
-		storageExporter.consumeLogs,
-		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
-		exporterhelper.WithTimeout(pCfg.TimeoutSettings),
-		exporterhelper.WithRetry(pCfg.RetrySettings),
-		exporterhelper.WithQueue(pCfg.QueueSettings),
-		exporterhelper.WithStart(storageExporter.start),
-		exporterhelper.WithShutdown(storageExporter.shutdown),
-	)
-}

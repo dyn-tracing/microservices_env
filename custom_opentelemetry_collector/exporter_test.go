@@ -50,8 +50,6 @@ func TestExporterDefaultSettings(t *testing.T) {
 	}
 	assert.NoError(t, exporter.start(ctx, nil))
 	assert.NoError(t, exporter.consumeTraces(ctx, pdata.NewTraces()))
-	assert.NoError(t, exporter.consumeMetrics(ctx, pdata.NewMetrics()))
-	assert.NoError(t, exporter.consumeLogs(ctx, pdata.NewLogs()))
 	assert.NoError(t, exporter.shutdown(ctx))
 }
 
@@ -76,7 +74,5 @@ func TestExporterCompression(t *testing.T) {
 	}
 	assert.NoError(t, exporter.start(ctx, nil))
 	assert.NoError(t, exporter.consumeTraces(ctx, pdata.NewTraces()))
-	assert.NoError(t, exporter.consumeMetrics(ctx, pdata.NewMetrics()))
-	assert.NoError(t, exporter.consumeLogs(ctx, pdata.NewLogs()))
 	assert.NoError(t, exporter.shutdown(ctx))
 }

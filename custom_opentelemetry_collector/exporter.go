@@ -23,10 +23,12 @@ import (
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
+    "go.uber.org/multierr"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.uber.org/zap"
+    "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
 )
 
 const name = "googlecloudstorage"
@@ -42,8 +44,6 @@ type storageExporter struct {
 	ceCompression        Compression
 	config               *Config
 	tracesMarshaler      pdata.TracesMarshaler
-	metricsMarshaler     pdata.MetricsMarshaler
-	logsMarshaler        pdata.LogsMarshaler
 }
 
 func (*storageExporter) Name() string {
@@ -77,8 +77,6 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 		ex.client = client
 	}
 	ex.tracesMarshaler = otlp.NewProtobufTracesMarshaler()
-	ex.metricsMarshaler = otlp.NewProtobufMetricsMarshaler()
-	ex.logsMarshaler = otlp.NewProtobufLogsMarshaler()
     ex.spanBucketExists(ctx, trace_bucket)
 	return nil
 }
@@ -183,6 +181,14 @@ func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
 }
 
 func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
+	var errs error
+    for _, singleTrace := range batchpersignal.SplitTraces(traces) {
+		errs = multierr.Append(errs, ex.consumeTrace(ctx, singleTrace))
+	}
+    return errs
+}
+
+func (ex *storageExporter) consumeTrace(ctx context.Context, traces pdata.Traces) error {
     // citation:  stole the structure of this code from https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/honeycombexporter/honeycomb.go and from https://github.com/open-telemetry/opentelemetry-collector/blob/0afea3faaac826d9b122046c68dbaae1e2a64ff5/internal/otlptext/traces.go#L29
     var err error
 	rss := traces.ResourceSpans()
@@ -226,15 +232,4 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 	}
     return err
 
-}
-
-// TODO:  get rid of these functions
-func (ex *storageExporter) consumeMetrics(ctx context.Context, metrics pdata.Metrics) error {
-	_, err := ex.metricsMarshaler.MarshalMetrics(metrics)
-    return err
-}
-
-func (ex *storageExporter) consumeLogs(ctx context.Context, logs pdata.Logs) error {
-	_, err := ex.logsMarshaler.MarshalLogs(logs)
-    return err
 }

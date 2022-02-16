@@ -51,36 +51,6 @@ func TestCreateTracesExporter(t *testing.T) {
 	assert.NotNil(t, te, "failed to create trace exporter")
 }
 
-func TestCreateMetricsExporter(t *testing.T) {
-	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig()
-	eCfg := cfg.(*Config)
-	eCfg.Endpoint = "http://testing.invalid"
-
-	me, err := factory.CreateMetricsExporter(
-		context.Background(),
-		componenttest.NewNopExporterCreateSettings(),
-		eCfg,
-	)
-	assert.NoError(t, err)
-	assert.NotNil(t, me, "failed to create metrics exporter")
-}
-
-func TestLogsCreateExporter(t *testing.T) {
-	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig()
-	eCfg := cfg.(*Config)
-	eCfg.Endpoint = "http://testing.invalid"
-
-	me, err := factory.CreateLogsExporter(
-		context.Background(),
-		componenttest.NewNopExporterCreateSettings(),
-		eCfg,
-	)
-	assert.NoError(t, err)
-	assert.NotNil(t, me, "failed to create logs exporter")
-}
-
 func TestEnsureExporter(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
