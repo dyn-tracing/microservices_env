@@ -114,7 +114,7 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
     return err
 }
 
-func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string, traceID string) error {
+func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string) error {
     var err error
 
     // TODO:  figure out compression
@@ -143,23 +143,26 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
         return fmt.Errorf("failed closing the span object in bucket %s: %w", bucketID, err)
     }
 
+	return err
+}
+
+func (ex *storageExporter) publishTrace(ctx context.Context, data dataBuffer, traceID string) error {
     // now make sure to add it to the trace bucket
     // we know that trace bucket for sure already exists bc of the start function
     //trace_bkt := ex.client.Bucket(trace_bucket)
     trace_bkt := ex.client.Bucket(trace_bucket)
     ex.spanBucketExists(ctx, trace_bucket)
-    
-    trace_obj := trace_bkt.Object(traceID+serviceName)
+
+    trace_obj := trace_bkt.Object(traceID)
     // TODO:  this is not robust to the same service being called twice in a trace
     w_trace := trace_obj.NewWriter(ctx)
-    if _, err := w_trace.Write([]byte(spanID)); err != nil {
+    if _, err := w_trace.Write([]byte(data.buf.Bytes())); err != nil {
         return fmt.Errorf("failed creating the object: %w", err)
     }
     if err := w_trace.Close(); err != nil {
-        return fmt.Errorf("failed closing the trace object %s: %w", traceID+serviceName, err)
+        return fmt.Errorf("failed closing the trace object %s: %w", traceID, err)
     }
-    // we aren't sure if trace object exists or not yet
-	return err
+    return nil
 }
 
 func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
@@ -190,7 +193,9 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 
 func (ex *storageExporter) consumeTrace(ctx context.Context, traces pdata.Traces) error {
     // citation:  stole the structure of this code from https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/honeycombexporter/honeycomb.go and from https://github.com/open-telemetry/opentelemetry-collector/blob/0afea3faaac826d9b122046c68dbaae1e2a64ff5/internal/otlptext/traces.go#L29
-    var err error
+    var traceID string
+    traceBuf := dataBuffer{}
+
 	rss := traces.ResourceSpans()
 	for i := 0; i < rss.Len(); i++ {
 		rs := rss.At(i)
@@ -212,6 +217,7 @@ func (ex *storageExporter) consumeTrace(ctx context.Context, traces pdata.Traces
                     buf.logEntry("Span #%d", k)
                     span := spans.At(k)
                     buf.logAttr("Trace ID", span.TraceID().HexString())
+                    traceID = span.TraceID().HexString()
                     buf.logAttr("Parent ID", span.ParentSpanID().HexString())
                     buf.logAttr("ID", span.SpanID().HexString())
                     buf.logAttr("Name", span.Name())
@@ -225,11 +231,11 @@ func (ex *storageExporter) consumeTrace(ctx context.Context, traces pdata.Traces
                     buf.logAttributeMap("Attributes", span.Attributes())
                     buf.logEvents("Events", span.Events())
                     buf.logLinks("Links", span.Links())
-                    return ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString(), span.TraceID().HexString())
+                    ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString())
                 }
             }
 		}
 	}
-    return err
+    return ex.publishTrace(ctx, traceBuf, traceID)
 
 }
