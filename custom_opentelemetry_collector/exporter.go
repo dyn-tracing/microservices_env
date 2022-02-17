@@ -23,12 +23,12 @@ import (
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
-    "go.uber.org/multierr"
+    //"go.uber.org/multierr"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.uber.org/zap"
-    "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
+    //"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
 )
 
 const name = "googlecloudstorage"
@@ -154,7 +154,6 @@ func (ex *storageExporter) publishTrace(ctx context.Context, data dataBuffer, tr
     ex.spanBucketExists(ctx, trace_bucket)
 
     trace_obj := trace_bkt.Object(traceID)
-    // TODO:  this is not robust to the same service being called twice in a trace
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(data.buf.Bytes())); err != nil {
         return fmt.Errorf("failed creating the object: %w", err)
@@ -183,6 +182,7 @@ func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
 	return payload, nil
 }
 
+/*
 func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
 	var errs error
     for _, singleTrace := range batchpersignal.SplitTraces(traces) {
@@ -190,8 +190,10 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 	}
     return errs
 }
+*/
 
-func (ex *storageExporter) consumeTrace(ctx context.Context, traces pdata.Traces) error {
+
+func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
     // citation:  stole the structure of this code from https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/honeycombexporter/honeycomb.go and from https://github.com/open-telemetry/opentelemetry-collector/blob/0afea3faaac826d9b122046c68dbaae1e2a64ff5/internal/otlptext/traces.go#L29
     var traceID string
     traceBuf := dataBuffer{}
@@ -220,6 +222,9 @@ func (ex *storageExporter) consumeTrace(ctx context.Context, traces pdata.Traces
                     traceID = span.TraceID().HexString()
                     buf.logAttr("Parent ID", span.ParentSpanID().HexString())
                     buf.logAttr("ID", span.SpanID().HexString())
+                    traceBuf.logAttr("p: ", span.ParentSpanID().HexString())
+                    traceBuf.logAttr("c: ", span.SpanID().HexString())
+                    traceBuf.logAttr("c service: ", serviceName.StringVal())
                     buf.logAttr("Name", span.Name())
                     buf.logAttr("Kind", span.Kind().String())
                     buf.logAttr("Start time", span.StartTimestamp().String())
@@ -237,5 +242,4 @@ func (ex *storageExporter) consumeTrace(ctx context.Context, traces pdata.Traces
 		}
 	}
     return ex.publishTrace(ctx, traceBuf, traceID)
-
 }
