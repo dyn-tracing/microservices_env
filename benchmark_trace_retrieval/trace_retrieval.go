@@ -80,7 +80,6 @@ func getTrace(traceID string, client* storage.Client) (string, error) {
         if len(split) == 3 {
             newBuf, _ := downloadFileIntoMemory(&buf, string(split[2])+"-snicket", string(split[1]), client)
             entireTrace = entireTrace + bytes.NewBuffer(newBuf).String()
-            fmt.Printf("entire trace is %s\n\n\n\n", entireTrace)
         }
     }
     return entireTrace, nil
