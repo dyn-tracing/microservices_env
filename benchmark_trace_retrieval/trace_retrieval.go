@@ -9,6 +9,7 @@ import (
     "io"
     "io/ioutil"
     "os"
+    "sync"
 
     "cloud.google.com/go/storage"
 )
@@ -74,7 +75,6 @@ func getTrace(traceID string, client* storage.Client) (string, error) {
     if err != nil {
         return "", fmt.Errorf("downloadFileIntoMemory: %v", err)
     }
-    //fmt.Printf("tracebuf is %s\n", bytes.NewBuffer(traceBuf))
     for _, span := range bytes.Split(traceBuf, []byte("\n")) {
         split := bytes.Split(span, []byte(":"))
         if len(split) == 3 {
@@ -82,6 +82,41 @@ func getTrace(traceID string, client* storage.Client) (string, error) {
             entireTrace = entireTrace + bytes.NewBuffer(newBuf).String()
         }
     }
+    return entireTrace, nil
+}
+
+func getTraceParallelized(traceID string, client* storage.Client) (string, error) {
+    // Sets the name for the new bucket.
+    bucketName := "dyntraces-snicket"
+    var buf bytes.Buffer
+    var entireTrace string
+    traceBuf, err := downloadFileIntoMemory(&buf, bucketName, traceID, client)
+    if err != nil {
+        return "", fmt.Errorf("downloadFileIntoMemory: %v", err)
+    }
+
+    spans := bytes.Split(traceBuf, []byte("\n"))
+    numSpans := len(spans)
+    channels := make(chan string, numSpans)
+    var wg sync.WaitGroup
+    wg.Add(numSpans)
+    for _, span := range spans {
+        go func(span []byte) {
+            defer wg.Done()
+            split := bytes.Split(span, []byte(":"))
+            if len(split) == 3 {
+                newBuf, _ := downloadFileIntoMemory(&buf, string(split[2])+"-snicket", string(split[1]), client)
+                channels <- bytes.NewBuffer(newBuf).String()
+            }
+        }(span)
+    }
+    wg.Wait()
+    for i :=0; i<numSpans; i++ {
+        var span string
+        span = <-channels
+        entireTrace = entireTrace + span
+    }
+
     return entireTrace, nil
 }
 
@@ -95,6 +130,8 @@ func main() {
     }
     defer client.Close()
 
-    s, _ := getTrace("82b29a11332a18878a7d5664b583d983", client)
+    //s, _ := getTrace("82b29a11332a18878a7d5664b583d983", client)
+    //fmt.Printf("entire trace %s\n", s)
+    s, _ := getTraceParallelized("52b22dcfef3d16ac0bf6634f9ba61d5f", client)
     fmt.Printf("entire trace %s\n", s)
 }
