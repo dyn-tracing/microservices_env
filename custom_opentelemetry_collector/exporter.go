@@ -97,7 +97,7 @@ func (ex *storageExporter) serviceNameToBucketName(ctx context.Context, serviceN
     bucketID = strings.ReplaceAll(bucketID, "google", "")
     bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
-    return bucketID
+    return bucketID + "-snicket"
 }
 
 func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
@@ -129,9 +129,9 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     */
 
     // bucket will be service name
+    ex.spanBucketExists(ctx, serviceName)
     bucketID := ex.serviceNameToBucketName(ctx, serviceName)
     bkt := ex.client.Bucket(bucketID)
-    ex.spanBucketExists(ctx, bucketID)
 
     // object will be span ID
     obj := bkt.Object(spanID)
@@ -149,8 +149,7 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
 func (ex *storageExporter) publishTrace(ctx context.Context, data dataBuffer, traceID string) error {
     // now make sure to add it to the trace bucket
     // we know that trace bucket for sure already exists bc of the start function
-    //trace_bkt := ex.client.Bucket(trace_bucket)
-    trace_bkt := ex.client.Bucket(trace_bucket)
+    trace_bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, trace_bucket))
     ex.spanBucketExists(ctx, trace_bucket)
 
     trace_obj := trace_bkt.Object(traceID)
