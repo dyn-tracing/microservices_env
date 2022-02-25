@@ -75,11 +75,12 @@ func getTrace(traceID string, client* storage.Client) (string, error) {
     if err != nil {
         return "", fmt.Errorf("downloadFileIntoMemory: %v", err)
     }
+    //fmt.Printf("entire trace %v\n", bytes.NewBuffer(traceBuf))
     for _, span := range bytes.Split(traceBuf, []byte("\n")) {
         split := bytes.Split(span, []byte(":"))
         if len(split) == 3 {
             newBuf, _ := downloadFileIntoMemory(&buf, string(split[2])+"-snicket", string(split[1]), client)
-            entireTrace = entireTrace + bytes.NewBuffer(newBuf).String()
+            entireTrace = entireTrace + string(newBuf)
         }
     }
     return entireTrace, nil
@@ -106,7 +107,7 @@ func getTraceParallelized(traceID string, client* storage.Client) (string, error
             split := bytes.Split(span, []byte(":"))
             if len(split) == 3 {
                 newBuf, _ := downloadFileIntoMemory(&buf, string(split[2])+"-snicket", string(split[1]), client)
-                channels <- bytes.NewBuffer(newBuf).String()
+                channels <- string(newBuf)
             }
         }(span)
     }
@@ -130,7 +131,7 @@ func main() {
     }
     defer client.Close()
 
-    //s, _ := getTrace("82b29a11332a18878a7d5664b583d983", client)
+    //s, _ = getTrace("82b29a11332a18878a7d5664b583d983", client)
     //fmt.Printf("entire trace %s\n", s)
     s, _ := getTraceParallelized("52b22dcfef3d16ac0bf6634f9ba61d5f", client)
     fmt.Printf("entire trace %s\n", s)
