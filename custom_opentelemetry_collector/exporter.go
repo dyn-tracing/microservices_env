@@ -101,10 +101,15 @@ func (ex *storageExporter) serviceNameToBucketName(ctx context.Context, serviceN
 }
 
 func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
+    storageClassAndLocation := &storage.BucketAttrs{
+		StorageClass: "STANDARD",
+		Location:     "US",
+        LocationType: "region",
+	}
     bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, serviceName))
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
-        if err := bkt.Create(ctx, ex.config.ProjectID, nil); err != nil {
+        if err := bkt.Create(ctx, ex.config.ProjectID, storageClassAndLocation); err != nil {
             return fmt.Errorf("failed creating bucket: %w", err)
         }
     }
