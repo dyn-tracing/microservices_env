@@ -46,9 +46,11 @@ CONFIG_MATRIX = {
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json && \
                         {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  && \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests  ",
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests && \
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
         'undeploy_cmd': f"{DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/istio_manifests && \
-                          {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests "
+                          {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests && \
+                          {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
     },
     'TT': {
         'minikube_startup_command': None,
