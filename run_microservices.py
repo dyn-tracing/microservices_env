@@ -23,7 +23,8 @@ ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 YAML_DIR = FILE_DIR.joinpath("yaml_crds")
 
 ONLINE_BOUTIQUE_DIR = APP_DIR.joinpath("microservices-demo")
-TRAIN_TICKET_DIR = APP_DIR.joinpath("train-ticket/deployment/kubernetes-manifests/k8s-with-istio")
+TRAIN_TICKET_DIR = APP_DIR.joinpath(
+    "train-ticket/deployment/kubernetes-manifests/k8s-with-istio")
 
 PROJECT_ID = "dynamic-tracing"
 APPLY_CMD = "kubectl apply -f "
@@ -32,19 +33,19 @@ DELETE_CMD = "kubectl delete -f "
 CONFIG_MATRIX = {
     'BK': {
         'minikube_startup_command': "minikube start --cpus=2 --memory 4096 --disk-size 32g",
-        'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade \
+        'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
                                   --num-nodes=5 ",
         'deploy_cmd': f"{APPLY_CMD} {YAML_DIR}/bookinfo-services.yaml && \
                         {APPLY_CMD} {YAML_DIR}/bookinfo-apps.yaml && \
                         {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/bookinfo-gateway.yaml && \
                         {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-reviews.yaml ",
-        'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh" 
+        'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh"
     },
     'OB': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
         'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
-        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json && \
+        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  && \
                         {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests  ",
         'undeploy_cmd': f"{DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/istio_manifests && \
@@ -52,7 +53,7 @@ CONFIG_MATRIX = {
     },
     'TT': {
         'minikube_startup_command': None,
-        'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade \
+        'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
                                   --num-nodes=5 ",
         'deploy_cmd': f"{ISTIO_BIN} kube-inject -f {TRAIN_TICKET_DIR}/ts-deployment-part1.yml > dpl1.yml && " +
                       f"{APPLY_CMD} dpl1.yml && " +
@@ -69,6 +70,8 @@ CONFIG_MATRIX = {
 }
 
 ############## PLATFORM RELATED FUNCTIONS ###############################
+
+
 def inject_istio():
     cmd = f"{ISTIO_BIN} install --set profile=demo "
     cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --skip-confirmation "
@@ -89,6 +92,7 @@ def application_wait():
         _ = util.exec_process(wait_cmd)
     log.info("Application is ready.")
     return util.EXIT_SUCCESS
+
 
 def check_kubernetes_status():
     cmd = "kubectl cluster-info"
@@ -180,6 +184,9 @@ def deploy_application(application):
     deployments = deployments.split("\n")
     log.info("Starting horizontal autoscaling")
     for depl in deployments:
+        # Sometimes, the list contains whitespace.
+        if not depl.strip():
+            continue
         if "front" in depl:
             cmd = f"kubectl autoscale {depl} --min=1 --max=30 --cpu-percent=40"
         else:
@@ -191,11 +198,13 @@ def deploy_application(application):
 
     return result
 
+
 def remove_application(application):
     cmd = CONFIG_MATRIX[application]['undeploy_cmd']
     cmd += f"{DELETE_CMD} {YAML_DIR}/root-cluster.yaml "
     result = util.exec_process(cmd)
     return result
+
 
 def setup_application_deployment(platform, multizonal, application):
     result = start_kubernetes(platform, multizonal, application)
@@ -209,6 +218,7 @@ def setup_application_deployment(platform, multizonal, application):
         return result
     return result
 
+
 def main(args):
     # single commands to execute
     if args.setup:
@@ -219,6 +229,7 @@ def main(args):
         return remove_application(args.application)
     if args.clean:
         return stop_kubernetes(args.platform)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
