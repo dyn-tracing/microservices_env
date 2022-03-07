@@ -6,12 +6,11 @@ import (
 	"net/http"
 )
 
-const TempoQueryAddr = "http://34.69.177.136:16686"
-const GetTraceEndpoint = "/api/traces"
-const TraceId = "/215a45f0eb8a764e99758dac2b9ad8ed" // 31 spans
+const TempoQueryAddr = "http://35.193.123.140:16686/"
+const GetTraceEndpoint = "api/traces/"
 
-func getTrace() (error, []byte) {
-	resp, err := http.Get(TempoQueryAddr + GetTraceEndpoint + TraceId)
+func getTrace(traceId string) (error, []byte) {
+	resp, err := http.Get(TempoQueryAddr + GetTraceEndpoint + traceId)
 	if err != nil {
 		log.Fatal(err)
 		return err, nil
@@ -27,7 +26,7 @@ func getTrace() (error, []byte) {
 	return nil, body
 }
 func main() {
-	err, trace := getTrace()
+	err, trace := getTrace("6009004d2e8ca99b64a9a4e1924e4de3")
 	if err != nil {
 		log.Fatalln(err)
 	}
