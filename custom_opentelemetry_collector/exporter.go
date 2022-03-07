@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
     "strings"
-    "strconv"
+    //"strconv"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
@@ -65,6 +65,12 @@ const (
 	Uncompressed Compression = iota
 	GZip                     = iota
 )
+
+type spanStr struct {
+    parent string
+    id string
+    service string
+}
 
 // https://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
 func hash(s string) uint32 {
@@ -137,15 +143,18 @@ func (ex *storageExporter) hashTrace(ctx context.Context, traceBuf dataBuffer, t
     }
     // computed trace hash;  now need to put that in storage
     ex.spanBucketExists(ctx, "tracehashes")
+    /*
     bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, "tracehashes"))
-    obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
+    //obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
+    obj := bkt.Object("hello/"+traceID) // should this be 64 from the beginning?
     w := obj.NewWriter(ctx)
-    if _, err := w.Write([]byte(traceID)); err != nil {
+    if _, err := w.Write([]byte("hello")); err != nil {
         return fmt.Errorf("failed creating the object: %w", err)
     }
     if err := w.Close(); err != nil {
         return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID, err)
     }
+    */
     return nil
 
 }
@@ -294,6 +303,6 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
             }
 		}
 	}
-    ex.hashTrace(ctx, traceBuf, traceID)
+    //ex.hashTrace(ctx, traceBuf, traceID)
     return ex.publishTrace(ctx, traceBuf, traceID)
 }
