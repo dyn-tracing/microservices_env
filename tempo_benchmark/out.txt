@@ -1,7 +1,15 @@
-goos: darwin
+goos: linux
 goarch: amd64
 pkg: github.com/HaseebLUMS/tempo_benchmark
-cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
-BenchmarkGetTrace-16    	      18	1683871950 ns/op
+cpu: AMD EPYC 7B12
+BenchmarkGetBigTrace-2               	      30	 109829084 ns/op
+BenchmarkGetSmallTrace-2             	      30	  97506691 ns/op
+BenchmarkGetTinyTrace-2              	      30	  91032368 ns/op
+BenchmarkGetTwoBytes-2               	      30	  30974375 ns/op
+BenchmarkGetHundredBytes-2           	      30	  28023285 ns/op
+BenchmarkGetThousandBytes-2          	      30	  25619389 ns/op
+BenchmarkGetTenThousandBytes-2       	      30	  30854305 ns/op
+BenchmarkGetHundredThousandBytes-2   	      30	  24660615 ns/op
+BenchmarkGetMegaBytes-2              	      30	  35638705 ns/op
 PASS
-ok  	github.com/HaseebLUMS/tempo_benchmark	31.727s
+ok  	github.com/HaseebLUMS/tempo_benchmark	14.873s

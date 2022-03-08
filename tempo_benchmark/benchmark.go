@@ -27,7 +27,6 @@ func getTrace(traceId string) (error, []byte) {
 		log.Fatalln(err)
 		return err, nil
 	}
-
 	return nil, body
 }
 
