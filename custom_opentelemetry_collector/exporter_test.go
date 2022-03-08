@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -49,34 +48,5 @@ func TestExporterDefaultSettings(t *testing.T) {
 		},
 	}
 	assert.NoError(t, exporter.start(ctx, nil))
-	assert.NoError(t, exporter.consumeTraces(ctx, pdata.NewTraces()))
-	assert.NoError(t, exporter.consumeMetrics(ctx, pdata.NewMetrics()))
-	assert.NoError(t, exporter.consumeLogs(ctx, pdata.NewLogs()))
-	assert.NoError(t, exporter.shutdown(ctx))
-}
-
-func TestExporterCompression(t *testing.T) {
-	ctx := context.Background()
-	// Start a fake server running locally.
-
-	exporter := &storageExporter{
-		instanceName: "dummy",
-		logger:       zaptest.NewLogger(t),
-		userAgent:    "test-user-agent",
-
-		config: &Config{
-			Endpoint:  "127.0.0.1",
-			Insecure:  true,
-			ProjectID: "my-project",
-			TimeoutSettings: exporterhelper.TimeoutSettings{
-				Timeout: 12 * time.Second,
-			},
-		},
-		ceCompression: GZip,
-	}
-	assert.NoError(t, exporter.start(ctx, nil))
-	assert.NoError(t, exporter.consumeTraces(ctx, pdata.NewTraces()))
-	assert.NoError(t, exporter.consumeMetrics(ctx, pdata.NewMetrics()))
-	assert.NoError(t, exporter.consumeLogs(ctx, pdata.NewLogs()))
 	assert.NoError(t, exporter.shutdown(ctx))
 }

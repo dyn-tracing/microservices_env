@@ -38,9 +38,16 @@ type Config struct {
 	Endpoint string `mapstructure:"endpoint"`
 	// Only has effect if Endpoint is not ""
 	Insecure bool `mapstructure:"insecure"`
-
 	// Compression of the payload (only gzip or is supported, no compression is the default)
 	Compression string `mapstructure:"compression"`
+}
+
+func (config *Config) Validate() error {
+	_, err := config.parseCompression()
+	if err != nil {
+		return err
+	}
+    return nil
 }
 
 func (config *Config) validate() error {
@@ -51,6 +58,8 @@ func (config *Config) validate() error {
     return nil
 }
 
+var _ config.Exporter = (*Config)(nil)
+
 func (config *Config) parseCompression() (Compression, error) {
 	switch config.Compression {
 	case "gzip":
@@ -59,4 +68,12 @@ func (config *Config) parseCompression() (Compression, error) {
 		return Uncompressed, nil
 	}
 	return Uncompressed, fmt.Errorf("if specified, compression should be gzip ")
+}
+
+func (config *Config) validateForTrace() error {
+	err := config.validate()
+	if err != nil {
+		return err
+	}
+	return nil
 }
