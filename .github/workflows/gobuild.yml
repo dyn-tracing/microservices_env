@@ -1,0 +1,25 @@
+name: build-opentelemetry-collector
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  go-build-opentelemetry:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+          os: [macos-latest, ubuntu-20.04]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        ./tools/setup.sh
+    - name: Test with go build
+      run: |
+        cd custom_opentelemetry_collector
+        go build
