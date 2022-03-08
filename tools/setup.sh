@@ -23,7 +23,7 @@ rm -rf minikube-darwin-amd64
 # Need to use docker because we are in a VM
 minikube config set driver hyperkit
 # Try to install docker
-brew install docker docker-machine
+brew install  --cask docker docker-machine
 # Install go to build the telemetry collector
 brew install golang
 elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
