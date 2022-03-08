@@ -1,4 +1,4 @@
-name: test-opentelemetry-collector
+name: build-opentelemetry-collector
 on:
   push:
     branches: [ main ]
@@ -6,7 +6,7 @@ on:
     branches: [ main ]
 
 jobs:
-  go-test-opentelemetry:
+  go-build-opentelemetry:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -19,7 +19,7 @@ jobs:
     - name: Install dependencies
       run: |
         ./tools/setup.sh
-    - name: Test with go test
+    - name: Test with go build
       run: |
         cd custom_opentelemetry_collector
         go build
