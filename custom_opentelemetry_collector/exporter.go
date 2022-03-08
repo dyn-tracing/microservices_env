@@ -145,10 +145,9 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
     // computed trace hash;  now need to put that in storage
     ex.spanBucketExists(ctx, "tracehashes")
     bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, "tracehashes"))
-    //obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
-    obj := bkt.Object("hello/"+traceID) // should this be 64 from the beginning?
+    obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
     w := obj.NewWriter(ctx)
-    if _, err := w.Write([]byte("hello")); err != nil {
+    if _, err := w.Write([]byte(traceID)); err != nil {
         return fmt.Errorf("failed creating the object: %w", err)
     }
     if err := w.Close(); err != nil {
