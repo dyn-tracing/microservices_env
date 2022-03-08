@@ -3,7 +3,7 @@ This runs various microservice applications so that one can extract traces.
 
 
 ## Setup
-startup.sh should install most if not all of the dependencies necessary to run everything.
+`tools/setup.sh` should install most if not all of the dependencies necessary to run everything.
 
 ## To compile the collector
 The collector's code all lives within custom_opentelemetry_collector.  To build, run `docker build .` in the root of this directory.  Then you can push that image and use it in a cluster.
