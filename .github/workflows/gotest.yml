@@ -22,4 +22,4 @@ jobs:
     - name: Test with go test
       run: |
         cd custom_opentelemetry_collector
-        go test
+        go build
