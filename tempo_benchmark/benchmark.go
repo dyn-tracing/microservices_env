@@ -12,7 +12,7 @@ import (
 	"cloud.google.com/go/storage"
 )
 
-const TempoQueryAddr = "http://34.121.49.198:16686/"
+const TempoQueryAddr = "http://34.133.254.75:16686/"
 const GetTraceEndpoint = "api/traces/"
 
 func getTrace(traceId string) (error, []byte) {
@@ -30,7 +30,7 @@ func getTrace(traceId string) (error, []byte) {
 	}
 
 	if resp.StatusCode != 200 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s\n", resp.StatusCode, body)
+		log.Fatalf("%s Response failed with status code: %d and\nbody: %s\n", traceId, resp.StatusCode, body)
 	}
 	return nil, body
 }
@@ -54,7 +54,7 @@ func downloadFileIntoMemory(w io.Writer, bucket, object string, client *storage.
 }
 
 func main() {
-	err, trace := getTrace("9767ed368bf2053d8ac8c360e799d3f2")
+	err, trace := getTrace("7cd39c7f87b4c84fbea56d3a7c049d05")
 	if err != nil {
 		log.Fatalln(err)
 	}
