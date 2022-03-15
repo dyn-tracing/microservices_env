@@ -28,6 +28,7 @@ func getTrace(traceId string) (error, []byte) {
 		log.Fatalln(err)
 		return err, nil
 	}
+	// log.Println(len(body), resp.StatusCode)
 
 	if resp.StatusCode != 200 {
 		log.Fatalf("%s Response failed with status code: %d and\nbody: %s\n", traceId, resp.StatusCode, body)

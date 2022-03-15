@@ -1,7 +1,11 @@
 import numpy as np
 import scipy.stats as st
 
+<<<<<<< HEAD
 with open("out-tempo.txt") as f:
+=======
+with open("out-tempo-uncompressed.txt") as f:
+>>>>>>> 3ad1e8f40534c1aad13340d931278d34a4c9b1c3
     lines = f.read().split("\n")
     data_arrays = {}
     for line in lines:
