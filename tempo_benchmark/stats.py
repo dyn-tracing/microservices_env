@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.stats as st
 
-with open("out-jaeger.txt") as f:
+with open("out-tempo-uncompressed.txt") as f:
     lines = f.read().split("\n")
     data_arrays = {}
     for line in lines:
