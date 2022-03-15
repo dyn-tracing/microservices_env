@@ -52,42 +52,42 @@ func benchmarkGetFile(filename string, b *testing.B) {
 	}
 }
 
-func BenchmarkGetBigTrace(b *testing.B) {
-	benchmarkGetTrace(b, BigTrace)
-}
-
-func BenchmarkGetSmallTrace(b *testing.B) {
-	benchmarkGetTrace(b, SmallTrace)
-}
-
-func BenchmarkGetTinyTrace(b *testing.B) {
-	benchmarkGetTrace(b, TinyTrace)
-}
-
-func BenchmarkGetTwoBytes(b *testing.B) {
-	benchmarkGetFile(TwoBytes, b)
-}
-
-func BenchmarkGetHundredBytes(b *testing.B) {
-	benchmarkGetFile(HundredBytes, b)
-}
-
-func BenchmarkGetThousandBytes(b *testing.B) {
-	benchmarkGetFile(ThousandBytes, b)
-}
-
-func BenchmarkGetTenThousandBytes(b *testing.B) {
-	benchmarkGetFile(TenThousandBytes, b)
-}
-
-func BenchmarkGetHundredThousandBytes(b *testing.B) {
-	benchmarkGetFile(HundredThousandBytes, b)
-}
-
-func BenchmarkGetMegaBytes(b *testing.B) {
-	benchmarkGetFile(MegaBytes, b)
-}
-
+//func BenchmarkGetBigTrace(b *testing.B) {
+//	benchmarkGetTrace(b, BigTrace)
+//}
+//
+//func BenchmarkGetSmallTrace(b *testing.B) {
+//	benchmarkGetTrace(b, SmallTrace)
+//}
+//
+//func BenchmarkGetTinyTrace(b *testing.B) {
+//	benchmarkGetTrace(b, TinyTrace)
+//}
+//
+//func BenchmarkGetTwoBytes(b *testing.B) {
+//	benchmarkGetFile(TwoBytes, b)
+//}
+//
+//func BenchmarkGetHundredBytes(b *testing.B) {
+//	benchmarkGetFile(HundredBytes, b)
+//}
+//
+//func BenchmarkGetThousandBytes(b *testing.B) {
+//	benchmarkGetFile(ThousandBytes, b)
+//}
+//
+//func BenchmarkGetTenThousandBytes(b *testing.B) {
+//	benchmarkGetFile(TenThousandBytes, b)
+//}
+//
+//func BenchmarkGetHundredThousandBytes(b *testing.B) {
+//	benchmarkGetFile(HundredThousandBytes, b)
+//}
+//
+//func BenchmarkGetMegaBytes(b *testing.B) {
+//	benchmarkGetFile(MegaBytes, b)
+//}
+//
 func BenchmarkGetBigTraceBytes(b *testing.B) {
 	benchmarkGetFile(BigTraceBytes, b)
 }
