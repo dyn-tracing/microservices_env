@@ -24,6 +24,9 @@ const ThousandBytes = "thousandbytes.txt"
 const TenThousandBytes = "tenthousandbytes.txt"
 const HundredThousandBytes = "hundredthousandbytes.txt"
 const MegaBytes = "megabyte.txt"
+const BigTraceBytes = "bigtrace-49KB"
+const SmallTraceBytes = "smalltrace-8KB"
+const TinyTraceBytes = "tinytrace-4KB"
 
 func benchmarkGetTrace(b *testing.B, traceId string) {
 	for i := 0; i < b.N; i++ {
@@ -83,4 +86,16 @@ func BenchmarkGetHundredThousandBytes(b *testing.B) {
 
 func BenchmarkGetMegaBytes(b *testing.B) {
 	benchmarkGetFile(MegaBytes, b)
+}
+
+func BenchmarkGetBigTraceBytes(b *testing.B) {
+	benchmarkGetFile(BigTraceBytes, b)
+}
+
+func BenchmarkGetSmallTraceBytes(b *testing.B) {
+	benchmarkGetFile(SmallTraceBytes, b)
+}
+
+func BenchmarkGetTinyTraceBytes(b *testing.B) {
+	benchmarkGetFile(TinyTraceBytes, b)
 }
