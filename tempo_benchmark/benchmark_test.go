@@ -9,12 +9,15 @@ import (
 	"testing"
 )
 
-// const BigTrace = "6009004d2e8ca99b64a9a4e1924e4de3" //31 spans tempo
-const BigTrace = "a5d1800f3aa97ad534d54a0263c4645c" //31 spans jaeger
-// const SmallTrace = "0a9fc375450a9bbb5fc545ecbf0fda4a" //4 spans tempo
-const SmallTrace = "61aee0daf0a7e29ac35bdc243c395f93" //4 spans jaeger
-// const TinyTrace = "9767ed368bf2053d8ac8c360e799d3f2"  //1 span tempo
-const TinyTrace = "7cd39c7f87b4c84fbea56d3a7c049d05" //1 span jaeger
+// const BigTrace = "6009004d2e8ca99b64a9a4e1924e4de3" //31 spans tempo 49KB zstd snappy
+// const BigTrace = "a5d1800f3aa97ad534d54a0263c4645c" //31 spans jaeger
+// const SmallTrace = "0a9fc375450a9bbb5fc545ecbf0fda4a" //4 spans tempo 8KB zstd snappy
+// const SmallTrace = "61aee0daf0a7e29ac35bdc243c395f93" //4 spans jaeger
+// const TinyTrace = "9767ed368bf2053d8ac8c360e799d3f2"  //1 span tempo 4KB zstd snappy
+// const TinyTrace = "7cd39c7f87b4c84fbea56d3a7c049d05" //1 span jaeger
+const BigTrace = "3a2cc78108bb208e78696e07767a7660"   // 31 spans tempo none
+const SmallTrace = "fc215a13ba225fda23a1479cd8b3fd0b" // 4 spans tempo none
+const TinyTrace = "11ae3837b779586559764e20cbbfb4ef"  // 1 span tempo none
 const TwoBytes = "twobytes.txt"
 const HundredBytes = "hundredbytes.txt"
 const ThousandBytes = "thousandbytes.txt"
