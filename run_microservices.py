@@ -44,7 +44,8 @@ CONFIG_MATRIX = {
     'OB': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
         'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
-                                  --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
+                                  --num-nodes=20  --machine-type e2-highmem-4 && \
+        gcloud container clusters update demo --enable-autoprovisioning --min-cpu 1 --min-memory 1 --max-cpu 128 --max-memory 1024 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  && \
                         {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests && \
@@ -190,9 +191,17 @@ def deploy_application(application):
         if not depl.strip():
             continue
         if "front" in depl:
-            cmd = f"kubectl autoscale {depl} --min=1 --max=30 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=30 --max=70 --cpu-percent=40"
+        elif "cart" in depl:
+            cmd = f"kubectl autoscale {depl} --min=10 --max=25 --cpu-percent=40"
+        elif "currency" in depl:
+            cmd = f"kubectl autoscale {depl} --min=20 --max=25 --cpu-percent=40"
+        elif "product" in depl:
+            cmd = f"kubectl autoscale {depl} --min=10 --max=25 --cpu-percent=40"
+        elif "recommendation" in depl:
+            cmd = f"kubectl autoscale {depl} --min=10 --max=25 --cpu-percent=40"
         else:
-            cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=1 --max=25 --cpu-percent=40"
         result = util.exec_process(cmd)
         if result != util.EXIT_SUCCESS:
             return result

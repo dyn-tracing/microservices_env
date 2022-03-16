@@ -148,7 +148,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
     obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
     w := obj.NewWriter(ctx)
     if _, err := w.Write([]byte(traceID)); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
+        return fmt.Errorf("failed creating the trace hash object: %w", err)
     }
     if err := w.Close(); err != nil {
         return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID, err)
@@ -210,7 +210,7 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     obj := bkt.Object(spanID)
     w := obj.NewWriter(ctx)
     if _, err := w.Write(data.buf.Bytes()); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
+        return fmt.Errorf("failed creating the span object: %w", err)
     }
     if err := w.Close(); err != nil {
         return fmt.Errorf("failed closing the span object in bucket %s: %w", bucketID, err)
@@ -232,7 +232,7 @@ func (ex *storageExporter) publishTrace(ctx context.Context, spans []spanStr, tr
     trace_obj := trace_bkt.Object(traceID)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
+        return fmt.Errorf("failed creating the trace object: %w", err)
     }
     if err := w_trace.Close(); err != nil {
         return fmt.Errorf("failed closing the trace object %s: %w", traceID, err)
