@@ -15,9 +15,9 @@ import (
 // const SmallTrace = "61aee0daf0a7e29ac35bdc243c395f93" //4 spans jaeger
 // const TinyTrace = "9767ed368bf2053d8ac8c360e799d3f2"  //1 span tempo 4KB zstd snappy
 // const TinyTrace = "7cd39c7f87b4c84fbea56d3a7c049d05" //1 span jaeger
-const BigTrace = "3a2cc78108bb208e78696e07767a7660"   // 31 spans tempo none
-const SmallTrace = "fc215a13ba225fda23a1479cd8b3fd0b" // 4 spans tempo none
-const TinyTrace = "11ae3837b779586559764e20cbbfb4ef"  // 1 span tempo none
+const BigTrace = "2472d3e83992e79d7175440200670290"   // 30 spans tempo none
+const SmallTrace = "20915f0819ea88f9f904f675a8403d32" // 4 spans tempo none
+const TinyTrace = "26339b77c78609ed92c82a36a47ecb3f"  // 1 span tempo none
 const TwoBytes = "twobytes.txt"
 const HundredBytes = "hundredbytes.txt"
 const ThousandBytes = "thousandbytes.txt"
@@ -52,21 +52,22 @@ func benchmarkGetFile(filename string, b *testing.B) {
 	}
 }
 
-//func BenchmarkGetBigTrace(b *testing.B) {
-//	benchmarkGetTrace(b, BigTrace)
-//}
-//
-//func BenchmarkGetSmallTrace(b *testing.B) {
-//	benchmarkGetTrace(b, SmallTrace)
-//}
-//
-//func BenchmarkGetTinyTrace(b *testing.B) {
-//	benchmarkGetTrace(b, TinyTrace)
-//}
-//
-//func BenchmarkGetTwoBytes(b *testing.B) {
-//	benchmarkGetFile(TwoBytes, b)
-//}
+func BenchmarkGetBigTrace(b *testing.B) {
+	benchmarkGetTrace(b, BigTrace)
+}
+
+func BenchmarkGetSmallTrace(b *testing.B) {
+	benchmarkGetTrace(b, SmallTrace)
+}
+
+func BenchmarkGetTinyTrace(b *testing.B) {
+	benchmarkGetTrace(b, TinyTrace)
+}
+
+func BenchmarkGetTwoBytes(b *testing.B) {
+	benchmarkGetFile(TwoBytes, b)
+}
+
 //
 //func BenchmarkGetHundredBytes(b *testing.B) {
 //	benchmarkGetFile(HundredBytes, b)
@@ -88,14 +89,14 @@ func benchmarkGetFile(filename string, b *testing.B) {
 //	benchmarkGetFile(MegaBytes, b)
 //}
 //
-func BenchmarkGetBigTraceBytes(b *testing.B) {
-	benchmarkGetFile(BigTraceBytes, b)
-}
+// func BenchmarkGetBigTraceBytes(b *testing.B) {
+// 	benchmarkGetFile(BigTraceBytes, b)
+// }
 
-func BenchmarkGetSmallTraceBytes(b *testing.B) {
-	benchmarkGetFile(SmallTraceBytes, b)
-}
+// func BenchmarkGetSmallTraceBytes(b *testing.B) {
+// 	benchmarkGetFile(SmallTraceBytes, b)
+// }
 
-func BenchmarkGetTinyTraceBytes(b *testing.B) {
-	benchmarkGetFile(TinyTraceBytes, b)
-}
+// func BenchmarkGetTinyTraceBytes(b *testing.B) {
+// 	benchmarkGetFile(TinyTraceBytes, b)
+// }

@@ -12,7 +12,7 @@ import (
 	"cloud.google.com/go/storage"
 )
 
-const TempoQueryAddr = "http://35.239.23.161:16686/"
+const TempoQueryAddr = "http://104.155.190.158:16686/"
 const GetTraceEndpoint = "api/traces/"
 
 func getTrace(traceId string) (error, []byte) {
