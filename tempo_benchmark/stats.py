@@ -1,7 +1,11 @@
 import numpy as np
 import scipy.stats as st
+import sys
 
-with open("out-gcs-trace-bytes.txt") as f:
+fn = sys.argv[1]
+print("Stat-ing " + fn)
+
+with open(fn) as f:
     lines = f.read().split("\n")
     data_arrays = {}
     for line in lines:
