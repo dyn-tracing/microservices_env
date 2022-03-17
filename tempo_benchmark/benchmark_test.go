@@ -52,51 +52,50 @@ func benchmarkGetFile(filename string, b *testing.B) {
 	}
 }
 
-func BenchmarkGetBigTrace(b *testing.B) {
-	benchmarkGetTrace(b, BigTrace)
-}
+// func BenchmarkGetBigTrace(b *testing.B) {
+// 	benchmarkGetTrace(b, BigTrace)
+// }
 
-func BenchmarkGetSmallTrace(b *testing.B) {
-	benchmarkGetTrace(b, SmallTrace)
-}
+// func BenchmarkGetSmallTrace(b *testing.B) {
+// 	benchmarkGetTrace(b, SmallTrace)
+// }
 
-func BenchmarkGetTinyTrace(b *testing.B) {
-	benchmarkGetTrace(b, TinyTrace)
-}
+// func BenchmarkGetTinyTrace(b *testing.B) {
+// 	benchmarkGetTrace(b, TinyTrace)
+// }
 
 func BenchmarkGetTwoBytes(b *testing.B) {
 	benchmarkGetFile(TwoBytes, b)
 }
 
-//
-//func BenchmarkGetHundredBytes(b *testing.B) {
-//	benchmarkGetFile(HundredBytes, b)
-//}
-//
-//func BenchmarkGetThousandBytes(b *testing.B) {
-//	benchmarkGetFile(ThousandBytes, b)
-//}
-//
-//func BenchmarkGetTenThousandBytes(b *testing.B) {
-//	benchmarkGetFile(TenThousandBytes, b)
-//}
-//
-//func BenchmarkGetHundredThousandBytes(b *testing.B) {
-//	benchmarkGetFile(HundredThousandBytes, b)
-//}
-//
-//func BenchmarkGetMegaBytes(b *testing.B) {
-//	benchmarkGetFile(MegaBytes, b)
-//}
-//
-// func BenchmarkGetBigTraceBytes(b *testing.B) {
-// 	benchmarkGetFile(BigTraceBytes, b)
-// }
+func BenchmarkGetHundredBytes(b *testing.B) {
+	benchmarkGetFile(HundredBytes, b)
+}
 
-// func BenchmarkGetSmallTraceBytes(b *testing.B) {
-// 	benchmarkGetFile(SmallTraceBytes, b)
-// }
+func BenchmarkGetThousandBytes(b *testing.B) {
+	benchmarkGetFile(ThousandBytes, b)
+}
 
-// func BenchmarkGetTinyTraceBytes(b *testing.B) {
-// 	benchmarkGetFile(TinyTraceBytes, b)
-// }
+func BenchmarkGetTenThousandBytes(b *testing.B) {
+	benchmarkGetFile(TenThousandBytes, b)
+}
+
+func BenchmarkGetHundredThousandBytes(b *testing.B) {
+	benchmarkGetFile(HundredThousandBytes, b)
+}
+
+func BenchmarkGetMegaBytes(b *testing.B) {
+	benchmarkGetFile(MegaBytes, b)
+}
+
+func BenchmarkGetBigTraceBytes(b *testing.B) {
+	benchmarkGetFile(BigTraceBytes, b)
+}
+
+func BenchmarkGetSmallTraceBytes(b *testing.B) {
+	benchmarkGetFile(SmallTraceBytes, b)
+}
+
+func BenchmarkGetTinyTraceBytes(b *testing.B) {
+	benchmarkGetFile(TinyTraceBytes, b)
+}
