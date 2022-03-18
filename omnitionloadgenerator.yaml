@@ -607,27 +607,27 @@ data:
         {
           "service": "frontend",
           "route": "/product",
-          "tracesPerHour": 2880
+          "tracesPerHour": 1000000
         },
         {
           "service": "frontend",
           "route": "/cart",
-          "tracesPerHour": 14400
+          "tracesPerHour": 1000000
         },
         {
           "service": "frontend",
           "route": "/shipping",
-          "tracesPerHour": 480
+          "tracesPerHour": 1000000
         },
         {
           "service": "frontend",
           "route": "/currency",
-          "tracesPerHour": 200
+          "tracesPerHour": 1000000
         },
         {
           "service": "frontend",
           "route": "/checkout",
-          "tracesPerHour": 480
+          "tracesPerHour": 1000000
         }
       ]
     }
@@ -657,8 +657,9 @@ spec:
     spec:
       containers:
       - env:
-        - name: ZIPKINV1_JSON_URL
-          value: http://otelcollector:9411
+        - name: JAEGER_COLLECTOR_URL
+          value: http://tempo:14268
+          #value: http://otelcollector:9411
           #value: http://otelcollector:4317
         - name: TOPOLOGY_FILE
           value: /conf/load-generator.json

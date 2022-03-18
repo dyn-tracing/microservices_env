@@ -46,11 +46,10 @@ CONFIG_MATRIX = {
         'gcloud_startup_command':"gcloud container clusters create demo2 --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json && \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests && \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests ",
-
-                        #{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests/otelcollector.yaml && \
-                        #{APPLY_CMD} {FILE_DIR}/omnitionloadgenerator.yaml  ",
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests/tempo.yaml && \
+                        {APPLY_CMD} {FILE_DIR}/omnitionloadgenerator.yaml  ",
+                        #{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests && \
+                        #{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests ",
         'undeploy_cmd': f"{DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/istio_manifests && \
                           {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests "
     },
