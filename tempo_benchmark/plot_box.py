@@ -47,7 +47,7 @@ for patch, color in zip(bp['boxes'], colors):
  
 # x-axis labels
 ax.set_yticklabels(['2 B', '100 B',
-                    '1,000B', '10,000 B', '10,000 B', 'MB', 'BigTrace(49kB)', 'SmallTrace(8kB)', 'TinyTrace(4kB)'])
+                    '1,000B', '10,000 B', '100,000 B', 'MB', 'BigTrace(49kB)', 'SmallTrace(8kB)', 'TinyTrace(4kB)'])
 
  
 # Adding title
