@@ -72,6 +72,12 @@ type spanStr struct {
     service string
 }
 
+type spanBuf struct {
+    buf dataBuffer
+    id string
+    service string
+}
+
 // https://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
 func hash(s string) uint32 {
         h := fnv.New32a()
@@ -101,6 +107,12 @@ func (ex *storageExporter) shutdown(context.Context) error {
 		ex.client = nil
 	}
 	return nil
+}
+
+func (ex *storageExporter) hashTraceFuture(ctx context.Context, spans []spanStr, traceID string) (chan error) {
+    future := make (chan error);
+    go func () {future <- ex.hashTrace(ctx, spans, traceID) } ();
+    return future;
 }
 
 func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) error {
@@ -148,7 +160,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
     obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
     w := obj.NewWriter(ctx)
     if _, err := w.Write([]byte(traceID)); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
+        return fmt.Errorf("failed creating the trace hash object: %w", err)
     }
     if err := w.Close(); err != nil {
         return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID, err)
@@ -187,6 +199,13 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
     return err
 }
 
+func (ex *storageExporter) publishSpanFuture(ctx context.Context, data dataBuffer, serviceName string, spanID string) (chan error) {
+    future := make (chan error)
+    go func () { future <- ex.publishSpan(ctx, data, serviceName, spanID) }();
+    return future;
+
+}
+
 func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string) error {
     var err error
 
@@ -210,13 +229,19 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     obj := bkt.Object(spanID)
     w := obj.NewWriter(ctx)
     if _, err := w.Write(data.buf.Bytes()); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
+        return fmt.Errorf("failed creating the span object: %w", err)
     }
     if err := w.Close(); err != nil {
         return fmt.Errorf("failed closing the span object in bucket %s: %w", bucketID, err)
     }
 
 	return err
+}
+
+func (ex *storageExporter) publishTraceFuture(ctx context.Context, spans []spanStr, traceID string) (chan error) {
+    future := make (chan error);
+    go func () { future <- ex.publishTrace(ctx, spans, traceID) } ();
+    return future;
 }
 
 func (ex *storageExporter) publishTrace(ctx context.Context, spans []spanStr, traceID string) error {
@@ -232,7 +257,7 @@ func (ex *storageExporter) publishTrace(ctx context.Context, spans []spanStr, tr
     trace_obj := trace_bkt.Object(traceID)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
+        return fmt.Errorf("failed creating the trace object: %w", err)
     }
     if err := w_trace.Close(); err != nil {
         return fmt.Errorf("failed closing the trace object %s: %w", traceID, err)
@@ -262,6 +287,8 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     // citation:  stole the structure of this code from https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/honeycombexporter/honeycomb.go and from https://github.com/open-telemetry/opentelemetry-collector/blob/0afea3faaac826d9b122046c68dbaae1e2a64ff5/internal/otlptext/traces.go#L29
     var traceID string
     var sp []spanStr
+    type futureError chan error;
+    var futEr []futureError
 
 	rss := traces.ResourceSpans()
 	for i := 0; i < rss.Len(); i++ {
@@ -299,12 +326,33 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
                     buf.logEvents("Events", span.Events())
                     buf.logLinks("Links", span.Links())
                     sp = append(sp, spanStr{parent: span.ParentSpanID().HexString(), id: span.SpanID().HexString(), service: serviceName.StringVal()})
-                    ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString())
+                    //spBuf = append(spBuf, spanBuf{buf: buf, id: span.SpanID().HexString(), service: serviceName.StringVal()})
+                    futEr = append(futEr, ex.publishSpanFuture(ctx, buf, serviceName.StringVal(), span.SpanID().HexString()))
+                    //ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString())
+                    
                 }
             }
 		}
 	}
+
     // TODO: we could probably do the two following things in parallel to speed things up
-    ex.hashTrace(ctx, sp, traceID)
-    return ex.publishTrace(ctx, sp, traceID)
+    var toReturn error
+    toReturn = nil
+    hashEr := ex.hashTraceFuture(ctx, sp, traceID)
+    pubTraceEr := ex.publishTraceFuture(ctx, sp, traceID)
+    for i:= 0; i< len(futEr); i++ {
+        spanError := <-futEr[i]
+        if spanError != nil {
+            toReturn = spanError
+        }
+    }
+    hashError := <-hashEr
+    if hashError != nil {
+        toReturn = hashError
+    }
+    pubTraceError := <-pubTraceEr
+    if pubTraceError != nil {
+        toReturn = pubTraceError
+    }
+    return toReturn
 }
