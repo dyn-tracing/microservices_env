@@ -288,7 +288,7 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     var traceID string
     var sp []spanStr
     type futureError chan error;
-    var futEr []futureError
+    //var futEr []futureError
 
 	rss := traces.ResourceSpans()
 	for i := 0; i < rss.Len(); i++ {
@@ -326,16 +326,13 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
                     buf.logEvents("Events", span.Events())
                     buf.logLinks("Links", span.Links())
                     sp = append(sp, spanStr{parent: span.ParentSpanID().HexString(), id: span.SpanID().HexString(), service: serviceName.StringVal()})
-                    //spBuf = append(spBuf, spanBuf{buf: buf, id: span.SpanID().HexString(), service: serviceName.StringVal()})
-                    futEr = append(futEr, ex.publishSpanFuture(ctx, buf, serviceName.StringVal(), span.SpanID().HexString()))
-                    //ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString())
-                    
+                    //futEr = append(futEr, ex.publishSpanFuture(ctx, buf, serviceName.StringVal(), span.SpanID().HexString()))
                 }
             }
 		}
 	}
 
-    // TODO: we could probably do the two following things in parallel to speed things up
+    /*
     var toReturn error
     toReturn = nil
     hashEr := ex.hashTraceFuture(ctx, sp, traceID)
@@ -355,4 +352,6 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
         toReturn = pubTraceError
     }
     return toReturn
+    */
+    return ex.publishTrace(ctx, sp, traceID)
 }

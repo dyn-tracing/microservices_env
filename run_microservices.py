@@ -46,8 +46,8 @@ CONFIG_MATRIX = {
         'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests/tracegen.yaml && \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/load_manifests ",
+                        #{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
                         #{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  && \
         'undeploy_cmd': f"{DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/istio_manifests && \
                           {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests && \
@@ -190,7 +190,7 @@ def deploy_application(application):
         if not depl.strip():
             continue
         if "front" in depl:
-            cmd = f"kubectl autoscale {depl} --min=1 --max=30 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=20 --max=30 --cpu-percent=40"
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
         result = util.exec_process(cmd)

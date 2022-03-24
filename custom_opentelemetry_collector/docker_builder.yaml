@@ -48,7 +48,7 @@ exporters:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/jaegerexporter v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/jaegerthrifthttpexporter v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter v0.47.0
-#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancingexporter v0.47.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancingexporter v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/logzioexporter v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/lokiexporter v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/newrelicexporter v0.47.0
