@@ -332,17 +332,18 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
 		}
 	}
 
-    /*
     var toReturn error
     toReturn = nil
     hashEr := ex.hashTraceFuture(ctx, sp, traceID)
     pubTraceEr := ex.publishTraceFuture(ctx, sp, traceID)
+    /*
     for i:= 0; i< len(futEr); i++ {
         spanError := <-futEr[i]
         if spanError != nil {
             toReturn = spanError
         }
     }
+    */
     hashError := <-hashEr
     if hashError != nil {
         toReturn = hashError
@@ -352,6 +353,5 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
         toReturn = pubTraceError
     }
     return toReturn
-    */
-    return ex.publishTrace(ctx, sp, traceID)
+    //return ex.publishTrace(ctx, sp, traceID)
 }
