@@ -288,7 +288,7 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     var traceID string
     var sp []spanStr
     type futureError chan error;
-    //var futEr []futureError
+    var futEr []futureError
 
 	rss := traces.ResourceSpans()
 	for i := 0; i < rss.Len(); i++ {
@@ -326,7 +326,7 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
                     buf.logEvents("Events", span.Events())
                     buf.logLinks("Links", span.Links())
                     sp = append(sp, spanStr{parent: span.ParentSpanID().HexString(), id: span.SpanID().HexString(), service: serviceName.StringVal()})
-                    //futEr = append(futEr, ex.publishSpanFuture(ctx, buf, serviceName.StringVal(), span.SpanID().HexString()))
+                    futEr = append(futEr, ex.publishSpanFuture(ctx, buf, serviceName.StringVal(), span.SpanID().HexString()))
                 }
             }
 		}
@@ -336,14 +336,12 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     toReturn = nil
     hashEr := ex.hashTraceFuture(ctx, sp, traceID)
     pubTraceEr := ex.publishTraceFuture(ctx, sp, traceID)
-    /*
     for i:= 0; i< len(futEr); i++ {
         spanError := <-futEr[i]
         if spanError != nil {
             toReturn = spanError
         }
     }
-    */
     hashError := <-hashEr
     if hashError != nil {
         toReturn = hashError
