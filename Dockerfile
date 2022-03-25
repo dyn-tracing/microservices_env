@@ -12,7 +12,7 @@ RUN go get go.opentelemetry.io/collector/component
 COPY ./custom_opentelemetry_collector ./custom_opentelemetry_collector
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-RUN go install go.opentelemetry.io/collector/cmd/builder@latest
+RUN go install go.opentelemetry.io/collector/cmd/builder@v0.43.0
 
 USER root
 
