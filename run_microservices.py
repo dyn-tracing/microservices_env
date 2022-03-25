@@ -35,7 +35,8 @@ CONFIG_MATRIX = {
         'minikube_startup_command': "minikube start --cpus=2 --memory 4096 --disk-size 32g",
         'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
                                   --num-nodes=5 ",
-        'deploy_cmd': f"{APPLY_CMD} {YAML_DIR}/bookinfo-services.yaml && \
+        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
+                        {APPLY_CMD} {YAML_DIR}/bookinfo-services.yaml && \
                         {APPLY_CMD} {YAML_DIR}/bookinfo-apps.yaml && \
                         {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/bookinfo-gateway.yaml && \
                         {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-reviews.yaml ",
