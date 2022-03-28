@@ -233,7 +233,6 @@ BenchmarkGetMegaBytes-2              	       1	  29726992 ns/op
 BenchmarkGetMegaBytes-2              	       1	  27822706 ns/op
 BenchmarkGetMegaBytes-2              	       1	  29199571 ns/op
 BenchmarkGetMegaBytes-2              	       1	  35690276 ns/op
-BenchmarkGetMegaBytes-2              	       1	 507056368 ns/op
 BenchmarkGetMegaBytes-2              	       1	  26668109 ns/op
 BenchmarkGetMegaBytes-2              	       1	  45022317 ns/op
 BenchmarkGetMegaBytes-2              	       1	  28174681 ns/op

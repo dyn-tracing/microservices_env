@@ -2,7 +2,6 @@ goos: linux
 goarch: amd64
 pkg: github.com/HaseebLUMS/tempo_benchmark
 cpu: Intel(R) Xeon(R) CPU @ 2.20GHz
-BenchmarkGetTwoBytes-2               	       1	  47757543 ns/op
 BenchmarkGetTwoBytes-2               	       1	  30606073 ns/op
 BenchmarkGetTwoBytes-2               	       1	  32361050 ns/op
 BenchmarkGetTwoBytes-2               	       1	  29584211 ns/op
@@ -43,7 +42,6 @@ BenchmarkGetTwoBytes-2               	       1	  32250970 ns/op
 BenchmarkGetTwoBytes-2               	       1	  33628816 ns/op
 BenchmarkGetTwoBytes-2               	       1	  32229506 ns/op
 BenchmarkGetTwoBytes-2               	       1	  30627638 ns/op
-BenchmarkGetHundredBytes-2           	       1	  56064685 ns/op
 BenchmarkGetHundredBytes-2           	       1	  37152885 ns/op
 BenchmarkGetHundredBytes-2           	       1	  29891137 ns/op
 BenchmarkGetHundredBytes-2           	       1	  31685807 ns/op
@@ -84,7 +82,6 @@ BenchmarkGetHundredBytes-2           	       1	  29044035 ns/op
 BenchmarkGetHundredBytes-2           	       1	  29541523 ns/op
 BenchmarkGetHundredBytes-2           	       1	  31679603 ns/op
 BenchmarkGetHundredBytes-2           	       1	  31283597 ns/op
-BenchmarkGetThousandBytes-2          	       1	  28134656 ns/op
 BenchmarkGetThousandBytes-2          	       1	  31959989 ns/op
 BenchmarkGetThousandBytes-2          	       1	  29408572 ns/op
 BenchmarkGetThousandBytes-2          	       1	  23601539 ns/op
@@ -125,7 +122,6 @@ BenchmarkGetThousandBytes-2          	       1	  41430760 ns/op
 BenchmarkGetThousandBytes-2          	       1	  32691181 ns/op
 BenchmarkGetThousandBytes-2          	       1	  32831026 ns/op
 BenchmarkGetThousandBytes-2          	       1	  26377105 ns/op
-BenchmarkGetTenThousandBytes-2       	       1	  24077376 ns/op
 BenchmarkGetTenThousandBytes-2       	       1	  27265309 ns/op
 BenchmarkGetTenThousandBytes-2       	       1	  32899775 ns/op
 BenchmarkGetTenThousandBytes-2       	       1	  28130771 ns/op
@@ -166,7 +162,6 @@ BenchmarkGetTenThousandBytes-2       	       1	  28109670 ns/op
 BenchmarkGetTenThousandBytes-2       	       1	  45470477 ns/op
 BenchmarkGetTenThousandBytes-2       	       1	  29926078 ns/op
 BenchmarkGetTenThousandBytes-2       	       1	  28715248 ns/op
-BenchmarkGetHundredThousandBytes-2   	       1	  53532710 ns/op
 BenchmarkGetHundredThousandBytes-2   	       1	  27596334 ns/op
 BenchmarkGetHundredThousandBytes-2   	       1	  30177979 ns/op
 BenchmarkGetHundredThousandBytes-2   	       1	  27725142 ns/op
@@ -207,7 +202,6 @@ BenchmarkGetHundredThousandBytes-2   	       1	  26753969 ns/op
 BenchmarkGetHundredThousandBytes-2   	       1	  26187755 ns/op
 BenchmarkGetHundredThousandBytes-2   	       1	  35089657 ns/op
 BenchmarkGetHundredThousandBytes-2   	       1	  38973156 ns/op
-BenchmarkGetMegaBytes-2              	       1	  36587933 ns/op
 BenchmarkGetMegaBytes-2              	       1	  31729813 ns/op
 BenchmarkGetMegaBytes-2              	       1	  30808577 ns/op
 BenchmarkGetMegaBytes-2              	       1	  26906943 ns/op
@@ -248,7 +242,6 @@ BenchmarkGetMegaBytes-2              	       1	  33709406 ns/op
 BenchmarkGetMegaBytes-2              	       1	  35334688 ns/op
 BenchmarkGetMegaBytes-2              	       1	  27322181 ns/op
 BenchmarkGetMegaBytes-2              	       1	  32273329 ns/op
-BenchmarkGetBigTraceBytes-2          	       1	  23846261 ns/op
 BenchmarkGetBigTraceBytes-2          	       1	  45245212 ns/op
 BenchmarkGetBigTraceBytes-2          	       1	  27390495 ns/op
 BenchmarkGetBigTraceBytes-2          	       1	  27915560 ns/op
@@ -289,7 +282,6 @@ BenchmarkGetBigTraceBytes-2          	       1	  30371958 ns/op
 BenchmarkGetBigTraceBytes-2          	       1	  26411271 ns/op
 BenchmarkGetBigTraceBytes-2          	       1	  25520410 ns/op
 BenchmarkGetBigTraceBytes-2          	       1	  28878924 ns/op
-BenchmarkGetSmallTraceBytes-2        	       1	  25186035 ns/op
 BenchmarkGetSmallTraceBytes-2        	       1	  28260360 ns/op
 BenchmarkGetSmallTraceBytes-2        	       1	  36350326 ns/op
 BenchmarkGetSmallTraceBytes-2        	       1	  27367859 ns/op
@@ -330,7 +322,6 @@ BenchmarkGetSmallTraceBytes-2        	       1	  35733445 ns/op
 BenchmarkGetSmallTraceBytes-2        	       1	  27449433 ns/op
 BenchmarkGetSmallTraceBytes-2        	       1	  27074477 ns/op
 BenchmarkGetSmallTraceBytes-2        	       1	  23593597 ns/op
-BenchmarkGetTinyTraceBytes-2         	       1	  33746285 ns/op
 BenchmarkGetTinyTraceBytes-2         	       1	  23482815 ns/op
 BenchmarkGetTinyTraceBytes-2         	       1	  24668266 ns/op
 BenchmarkGetTinyTraceBytes-2         	       1	  29165542 ns/op
