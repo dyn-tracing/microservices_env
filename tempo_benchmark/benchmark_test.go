@@ -1,13 +1,17 @@
 package main
 
 import (
-	// "fmt"
 	"bytes"
 	"cloud.google.com/go/storage"
 	"context"
+	"fmt"
 	"log"
+	"os"
 	"testing"
+	"time"
 )
+
+const WriteBucketName = "gcs_write_bench"
 
 // const BigTrace = "6009004d2e8ca99b64a9a4e1924e4de3" //31 spans tempo 49KB zstd snappy
 // const BigTrace = "a5d1800f3aa97ad534d54a0263c4645c" //31 spans jaeger
@@ -52,6 +56,37 @@ func benchmarkGetFile(filename string, b *testing.B) {
 	}
 }
 
+func benchmarkWriteFile(objName string, b *testing.B) {
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	bkt := client.Bucket(WriteBucketName)
+
+	timestamp := fmt.Sprint(time.Now().Unix())
+	obj := bkt.Object(objName + timestamp)
+
+	w := obj.NewWriter(ctx)
+	defer w.Close()
+
+	dataBytes, err := os.ReadFile("./data/" + objName)
+	if err != nil {
+		log.Fatalf("Failed to read file: %v", err)
+	}
+	data := string(dataBytes)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := uploadDataToGCS(w, data)
+		if err != nil {
+			log.Fatalf("Failed to write object: %v", err)
+		}
+	}
+}
+
 // func BenchmarkGetBigTrace(b *testing.B) {
 // 	benchmarkGetTrace(b, BigTrace)
 // }
@@ -64,38 +99,86 @@ func benchmarkGetFile(filename string, b *testing.B) {
 // 	benchmarkGetTrace(b, TinyTrace)
 // }
 
-func BenchmarkGetTwoBytes(b *testing.B) {
-	benchmarkGetFile(TwoBytes, b)
+// func BenchmarkGetTwoBytes(b *testing.B) {
+// 	benchmarkGetFile(TwoBytes, b)
+// }
+
+// func BenchmarkGetHundredBytes(b *testing.B) {
+// 	benchmarkGetFile(HundredBytes, b)
+// }
+
+// func BenchmarkGetThousandBytes(b *testing.B) {
+// 	benchmarkGetFile(ThousandBytes, b)
+// }
+
+// func BenchmarkGetTenThousandBytes(b *testing.B) {
+// 	benchmarkGetFile(TenThousandBytes, b)
+// }
+
+// func BenchmarkGetHundredThousandBytes(b *testing.B) {
+// 	benchmarkGetFile(HundredThousandBytes, b)
+// }
+
+// func BenchmarkGetMegaBytes(b *testing.B) {
+// 	benchmarkGetFile(MegaBytes, b)
+// }
+
+// func BenchmarkGetBigTraceBytes(b *testing.B) {
+// 	benchmarkGetFile(BigTraceBytes, b)
+// }
+
+// func BenchmarkGetSmallTraceBytes(b *testing.B) {
+// 	benchmarkGetFile(SmallTraceBytes, b)
+// }
+
+// func BenchmarkGetTinyTraceBytes(b *testing.B) {
+// 	benchmarkGetFile(TinyTraceBytes, b)
+// }
+
+// func BenchmarkGetBigTrace(b *testing.B) {
+// 	benchmarkGetTrace(b, BigTrace)
+// }
+
+// func BenchmarkGetSmallTrace(b *testing.B) {
+// 	benchmarkGetTrace(b, SmallTrace)
+// }
+
+// func BenchmarkGetTinyTrace(b *testing.B) {
+// 	benchmarkGetTrace(b, TinyTrace)
+// }
+
+func BenchmarkPutTwoBytes(b *testing.B) {
+	benchmarkWriteFile(TwoBytes, b)
 }
 
-func BenchmarkGetHundredBytes(b *testing.B) {
-	benchmarkGetFile(HundredBytes, b)
+func BenchmarkPutHundredBytes(b *testing.B) {
+	benchmarkWriteFile(HundredBytes, b)
 }
 
-func BenchmarkGetThousandBytes(b *testing.B) {
-	benchmarkGetFile(ThousandBytes, b)
+func BenchmarkPutThousandBytes(b *testing.B) {
+	benchmarkWriteFile(ThousandBytes, b)
 }
 
-func BenchmarkGetTenThousandBytes(b *testing.B) {
-	benchmarkGetFile(TenThousandBytes, b)
+func BenchmarkPutTenThousandBytes(b *testing.B) {
+	benchmarkWriteFile(TenThousandBytes, b)
 }
 
-func BenchmarkGetHundredThousandBytes(b *testing.B) {
-	benchmarkGetFile(HundredThousandBytes, b)
+func BenchmarkPutHundredThousandBytes(b *testing.B) {
+	benchmarkWriteFile(HundredThousandBytes, b)
 }
 
-func BenchmarkGetMegaBytes(b *testing.B) {
-	benchmarkGetFile(MegaBytes, b)
+func BenchmarkPutMegaBytes(b *testing.B) {
+	benchmarkWriteFile(MegaBytes, b)
 }
 
-func BenchmarkGetBigTraceBytes(b *testing.B) {
-	benchmarkGetFile(BigTraceBytes, b)
+func BenchmarkPutBigTraceBytes(b *testing.B) {
+	benchmarkWriteFile(BigTraceBytes, b)
 }
 
-func BenchmarkGetSmallTraceBytes(b *testing.B) {
-	benchmarkGetFile(SmallTraceBytes, b)
+func BenchmarkPutSmallTraceBytes(b *testing.B) {
+	benchmarkWriteFile(SmallTraceBytes, b)
 }
 
-func BenchmarkGetTinyTraceBytes(b *testing.B) {
-	benchmarkGetFile(TinyTraceBytes, b)
+func BenchmarkPutTinyTraceBytes(b *testing.B) {
+	benchmarkWriteFile(TinyTraceBytes, b)
 }

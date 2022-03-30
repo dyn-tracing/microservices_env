@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -52,6 +53,20 @@ func downloadFileIntoMemory(w io.Writer, bucket, object string, client *storage.
 		return nil, fmt.Errorf("ioutil.ReadAll: %v", err)
 	}
 	return data, nil
+}
+
+func shuffleData(data string) string {
+	rand.Seed(time.Now().Unix())
+	dataRune := []rune(data)
+	rand.Shuffle(len(dataRune), func(i, j int) {
+		dataRune[i], dataRune[j] = dataRune[j], dataRune[i]
+	})
+	return string(dataRune)
+}
+
+func uploadDataToGCS(w io.Writer, data string) (int, error) {
+	n, err := fmt.Fprint(w, data)
+	return n, err
 }
 
 func main() {
