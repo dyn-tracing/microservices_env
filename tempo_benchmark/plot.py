@@ -9,20 +9,20 @@ df = pd.read_csv(fn)
 
 fig, ax = plt.subplots()
 
-ax.barh(
+ax.bar(
     df["BenchName"], 
     df["Median"], 
     color='blue', 
-    height=0.3,
-    xerr=df["CI"],
+    width=0.3,
+    yerr=df["CI"],
     capsize=5
 )
 
 for i, v in enumerate(df["Median"]):
-    ax.text(v - 5, i + .25, "m: " + str(v),
-            color = 'red')
-    ax.text(v + 3, i + .25, "ci:" + str(df["CI"][i]))
+    ax.text(i-0.05, v+6, str(v) + u"\u00B1" + str(df["CI"][i]),
+            color = 'red', rotation=60)
 
+plt.xticks(rotation = 45)
 plt.tight_layout()
 plt.ylabel("Time (ms) ")
 plt.show()

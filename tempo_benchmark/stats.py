@@ -36,4 +36,4 @@ for exp in data_arrays.keys():
             print("\taverage: ", avg, "\tmedian: ", median, "\tconfidence interval", ci, "\t ci/avg", ci_div_avg, "\n")
             #print(exp, "\t\t", avg, "\t", median, "\t", stdev, "%\n")
         if get_raw_csv == "1":
-            print(f"{exp.replace('BenchmarkGet', '').replace('-2', '')},{avg},{median},{ci},{ci_div_avg}")
+            print(f"{exp.replace('BenchmarkPut', '').replace('-2', '')},{avg},{median},{ci},{ci_div_avg}")
