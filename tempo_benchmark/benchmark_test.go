@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"cloud.google.com/go/storage"
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"testing"
-	"time"
 )
 
 const WriteBucketName = "gcs_write_bench"
@@ -65,9 +63,7 @@ func benchmarkWriteFile(objName string, b *testing.B) {
 	defer client.Close()
 
 	bkt := client.Bucket(WriteBucketName)
-
-	timestamp := fmt.Sprint(time.Now().Unix())
-	obj := bkt.Object(objName + timestamp)
+	obj := bkt.Object(objName + "." + randStr(10))
 
 	w := obj.NewWriter(ctx)
 	defer w.Close()
@@ -171,14 +167,14 @@ func BenchmarkPutMegaBytes(b *testing.B) {
 	benchmarkWriteFile(MegaBytes, b)
 }
 
-func BenchmarkPutBigTraceBytes(b *testing.B) {
-	benchmarkWriteFile(BigTraceBytes, b)
-}
+// func BenchmarkPutBigTraceBytes(b *testing.B) {
+// 	benchmarkWriteFile(BigTraceBytes, b)
+// }
 
-func BenchmarkPutSmallTraceBytes(b *testing.B) {
-	benchmarkWriteFile(SmallTraceBytes, b)
-}
+// func BenchmarkPutSmallTraceBytes(b *testing.B) {
+// 	benchmarkWriteFile(SmallTraceBytes, b)
+// }
 
-func BenchmarkPutTinyTraceBytes(b *testing.B) {
-	benchmarkWriteFile(TinyTraceBytes, b)
-}
+// func BenchmarkPutTinyTraceBytes(b *testing.B) {
+// 	benchmarkWriteFile(TinyTraceBytes, b)
+// }

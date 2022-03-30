@@ -64,6 +64,15 @@ func shuffleData(data string) string {
 	return string(dataRune)
 }
 
+func randStr(n int) string {
+	letters := []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 func uploadDataToGCS(w io.Writer, data string) (int, error) {
 	n, err := fmt.Fprint(w, data)
 	return n, err
