@@ -143,38 +143,38 @@ func benchmarkWriteFile(objName string, b *testing.B) {
 // 	benchmarkGetTrace(b, TinyTrace)
 // }
 
-func BenchmarkPutTwoBytes(b *testing.B) {
-	benchmarkWriteFile(TwoBytes, b)
-}
-
-func BenchmarkPutHundredBytes(b *testing.B) {
-	benchmarkWriteFile(HundredBytes, b)
-}
-
-func BenchmarkPutThousandBytes(b *testing.B) {
-	benchmarkWriteFile(ThousandBytes, b)
-}
-
-func BenchmarkPutTenThousandBytes(b *testing.B) {
-	benchmarkWriteFile(TenThousandBytes, b)
-}
-
-func BenchmarkPutHundredThousandBytes(b *testing.B) {
-	benchmarkWriteFile(HundredThousandBytes, b)
-}
-
-func BenchmarkPutMegaBytes(b *testing.B) {
-	benchmarkWriteFile(MegaBytes, b)
-}
-
-// func BenchmarkPutBigTraceBytes(b *testing.B) {
-// 	benchmarkWriteFile(BigTraceBytes, b)
+// func BenchmarkPutTwoBytes(b *testing.B) {
+// 	benchmarkWriteFile(TwoBytes, b)
 // }
 
-// func BenchmarkPutSmallTraceBytes(b *testing.B) {
-// 	benchmarkWriteFile(SmallTraceBytes, b)
+// func BenchmarkPutHundredBytes(b *testing.B) {
+// 	benchmarkWriteFile(HundredBytes, b)
 // }
 
-// func BenchmarkPutTinyTraceBytes(b *testing.B) {
-// 	benchmarkWriteFile(TinyTraceBytes, b)
+// func BenchmarkPutThousandBytes(b *testing.B) {
+// 	benchmarkWriteFile(ThousandBytes, b)
 // }
+
+// func BenchmarkPutTenThousandBytes(b *testing.B) {
+// 	benchmarkWriteFile(TenThousandBytes, b)
+// }
+
+// func BenchmarkPutHundredThousandBytes(b *testing.B) {
+// 	benchmarkWriteFile(HundredThousandBytes, b)
+// }
+
+// func BenchmarkPutMegaBytes(b *testing.B) {
+// 	benchmarkWriteFile(MegaBytes, b)
+// }
+
+func BenchmarkPutBigTraceBytes(b *testing.B) {
+	benchmarkWriteFile(BigTraceBytes, b)
+}
+
+func BenchmarkPutSmallTraceBytes(b *testing.B) {
+	benchmarkWriteFile(SmallTraceBytes, b)
+}
+
+func BenchmarkPutTinyTraceBytes(b *testing.B) {
+	benchmarkWriteFile(TinyTraceBytes, b)
+}
