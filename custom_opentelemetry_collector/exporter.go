@@ -21,6 +21,7 @@ import (
 	"fmt"
     "strings"
     "strconv"
+    //"time"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
@@ -155,7 +156,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
         }
     }
     // computed trace hash;  now need to put that in storage
-    ex.spanBucketExists(ctx, "tracehashes")
+    //ex.spanBucketExists(ctx, "tracehashes")
     bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, "tracehashes"))
     obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
     w := obj.NewWriter(ctx)
@@ -194,7 +195,7 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
         }
     }
     if err != nil {
-        return fmt.Errorf("failed getting bucket attributes: %w", err)
+        return fmt.Errorf("failed getting bucket attributes: %s %w", serviceName, err)
     }
     return err
 }
@@ -207,8 +208,6 @@ func (ex *storageExporter) publishSpanFuture(ctx context.Context, data dataBuffe
 }
 
 func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string) error {
-    var err error
-
     // TODO:  figure out compression
     /*
 	switch ex.ceCompression {
@@ -221,7 +220,7 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     */
 
     // bucket will be service name
-    ex.spanBucketExists(ctx, serviceName)
+    //ex.spanBucketExists(ctx, serviceName)
     bucketID := ex.serviceNameToBucketName(ctx, serviceName)
     bkt := ex.client.Bucket(bucketID)
 
@@ -234,8 +233,7 @@ func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, ser
     if err := w.Close(); err != nil {
         return fmt.Errorf("failed closing the span object in bucket %s: %w", bucketID, err)
     }
-
-	return err
+	return nil
 }
 
 func (ex *storageExporter) publishTraceFuture(ctx context.Context, spans []spanStr, traceID string) (chan error) {
@@ -290,15 +288,20 @@ func (ex *storageExporter) sendDummyData(ctx context.Context, traceID string) er
     }
 
     trace_bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, trace_bucket))
-    ex.spanBucketExists(ctx, trace_bucket)
+    /*
+    ret := ex.spanBucketExists(ctx, trace_bucket)
+    if ret != nil {
+        return ret
+    }
+    */
 
     trace_obj := trace_bkt.Object(traceID)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
-        return fmt.Errorf("failed creating the trace object: %w", err)
+        return fmt.Errorf("failed creating the trace object: %s %w", traceID, err)
     }
     if err := w_trace.Close(); err != nil {
-        return fmt.Errorf("failed closing the trace object: %w", err)
+        return fmt.Errorf("failed closing the trace object: %s %w", traceID, err)
     }
     return nil
 }
@@ -308,11 +311,8 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     var traceID string
     var sp []spanStr
     type futureError chan error;
-    //var futEr []futureError
-
-    //futureSpanErr := make (chan error)
-    numFutureSpanErr := 0
 	rss := traces.ResourceSpans()
+    buf := dataBuffer{}
 	for i := 0; i < rss.Len(); i++ {
 		rs := rss.At(i)
         r := rs.Resource()
@@ -320,8 +320,16 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
         // TODO:  somehow incorporate resource attrs
 
 		if serviceName, ok := r.Attributes().Get(conventions.AttributeServiceName); ok {
-            ex.spanBucketExists(ctx, serviceName.StringVal())
-            ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
+            /*
+            retSpanExit := ex.spanBucketExists(ctx, serviceName.StringVal())
+            if retSpanExit != nil {
+                return retSpanExit
+            }
+            retTraceExit := ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
+            if retTraceExit != nil {
+                return retTraceExit
+            }
+            */
             ilss := rs.InstrumentationLibrarySpans()
             for j := 0; j < ilss.Len(); j++ {
                 ils := ilss.At(j)
@@ -329,8 +337,8 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
                 // So this is essentially the same trace point
                 spans := ils.Spans()
                 for k := 0; k < spans.Len(); k++ {
-                    buf := dataBuffer{}
                     buf.logEntry("Span #%d", k)
+                    buf.logEntry("Service #%d", serviceName.StringVal())
                     span := spans.At(k)
                     buf.logAttr("Trace ID", span.TraceID().HexString())
                     traceID = span.TraceID().HexString()
@@ -348,76 +356,13 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
                     buf.logEvents("Events", span.Events())
                     buf.logLinks("Links", span.Links())
                     sp = append(sp, spanStr{parent: span.ParentSpanID().HexString(), id: span.SpanID().HexString(), service: serviceName.StringVal()})
-                    //if i == 0 && k == 0 {
-                    //if k == 0 {
-                    /*
-                    go func () { 
-                        futureSpanErr <- ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString() );
-                    }();
-                    */
-                    numFutureSpanErr = numFutureSpanErr + 1
-                    ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString() );
-
                 }
             }
 		}
 	}
-    var toReturn error
-    hashEr := ex.hashTraceFuture(ctx, sp, traceID)
-    pubTraceEr := ex.publishTraceFuture(ctx, sp, traceID)
-    /*
-    for i:= 0; i< numFutureSpanErr; i++ {
-        spanError := <-futureSpanErr
-        if spanError != nil {
-            toReturn = spanError
-        }
+    ret := ex.publishSpan(ctx, buf, trace_bucket, traceID)
+    if ret != nil {
+        ex.logger.Info("error is %s", zap.NamedError("help", ret))
     }
-    */
-
-    for i:=0; i<2; i++{
-    select {
-        case err := <-pubTraceEr:
-            if err != nil { toReturn = err }
-        case err1 := <-hashEr:
-            if err1 != nil { toReturn = err1 }
-    }
-    }
-    return toReturn
-    /*
-    var toReturn error
-    toReturn = nil
-    pubTraceEr := ex.publishTraceFuture(ctx, sp, traceID)
-    pubTraceError := <-pubTraceEr
-    if pubTraceError != nil {
-        toReturn = pubTraceError
-    }
-    */
-    /*
-    for i:= 0; i< len(futEr); i++ {
-        spanError := <-futEr[i]
-        if spanError != nil {
-            toReturn = spanError
-        }
-    }
-    */
-    /*
-    var toReturn error
-    toReturn = nil
-    hashEr := ex.hashTraceFuture(ctx, sp, traceID)
-    pubTraceEr := ex.publishTraceFuture(ctx, sp, traceID)
-    for i:= 0; i< len(futEr); i++ {
-        spanError := <-futEr[i]
-        if spanError != nil {
-            toReturn = spanError
-        }
-    }
-    hashError := <-hashEr
-    if hashError != nil {
-        toReturn = hashError
-    }
-    pubTraceError := <-pubTraceEr
-    if pubTraceError != nil {
-        toReturn = pubTraceError
-    }
-    */
+    return ret
 }

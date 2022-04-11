@@ -20,7 +20,9 @@ extensions:
 
 exporters:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter v0.0.0"
-    path: "./custom_opentelemetry_collector"
+    path: "../custom_opentelemetry_collector"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/hashexporter v0.0.0"
+    path: "../hashexporter"
   - import: go.opentelemetry.io/collector/exporter/loggingexporter
     gomod: go.opentelemetry.io/collector v0.47.0
   - import: go.opentelemetry.io/collector/exporter/otlpexporter
@@ -69,13 +71,13 @@ exporters:
 processors:
   - import: go.opentelemetry.io/collector/processor/batchprocessor
     gomod: go.opentelemetry.io/collector v0.47.0
-#  - import: go.opentelemetry.io/collector/processor/memorylimiterprocessor
-#    gomod: go.opentelemetry.io/collector v0.47.0
+  - import: go.opentelemetry.io/collector/processor/memorylimiterprocessor
+    gomod: go.opentelemetry.io/collector v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.47.0
-#  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.47.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.47.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbytraceprocessor v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor v0.47.0
 #  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricsgenerationprocessor v0.47.0

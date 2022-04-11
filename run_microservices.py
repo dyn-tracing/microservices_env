@@ -191,6 +191,8 @@ def deploy_application(application):
             continue
         if "front" in depl:
             cmd = f"kubectl autoscale {depl} --min=20 --max=30 --cpu-percent=40"
+        elif "otel" in depl:
+            pass
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
         result = util.exec_process(cmd)
