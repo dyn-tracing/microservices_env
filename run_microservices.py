@@ -39,8 +39,9 @@ CONFIG_MATRIX = {
                         {APPLY_CMD} {YAML_DIR}/bookinfo-services.yaml && \
                         {APPLY_CMD} {YAML_DIR}/bookinfo-apps.yaml && \
                         {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/bookinfo-gateway.yaml && \
-                        {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-reviews.yaml ",
-        'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh"
+                        {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-reviews.yaml && \
+                        {APPLY_CMD} {YAML_DIR}/otelcollector_bookinfo_zipkin.yaml ",
+        'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh",
     },
     'OB': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
@@ -75,9 +76,12 @@ CONFIG_MATRIX = {
 ############## PLATFORM RELATED FUNCTIONS ###############################
 
 
-def inject_istio():
+def inject_istio(application):
     cmd = f"{ISTIO_BIN} install --set profile=demo "
-    cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --set values.global.tracer.zipkin.address=otelcollector:9411 --skip-confirmation "
+    if application != "BK":
+        cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --skip-confirmation "
+    else:
+        cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --set meshConfig.defaultConfig.tracing.zipkin.address=otelcollector:9411 --skip-confirmation "
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
@@ -213,7 +217,7 @@ def setup_application_deployment(platform, multizonal, application):
     result = start_kubernetes(platform, multizonal, application)
     if result != util.EXIT_SUCCESS:
         return result
-    result = inject_istio()
+    result = inject_istio(application)
     if result != util.EXIT_SUCCESS:
         return result
     result = deploy_application(application)
