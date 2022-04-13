@@ -29,11 +29,7 @@ First, to deploy the application, do
 ```
 python3 run_microservices.py -p GCP -s
 ```
-Then, apply the otelcollector.yaml file by running
-```
-kubectl apply -f otelcollector.yaml
-```
-After this, check the status of the pods and wait until all pods are running by doing
+Then, check the status of the pods and wait until all pods are running by doing
 ```
 kubectl get pods
 ```
