@@ -37,6 +37,55 @@ func getTrace(traceId string) (error, []byte) {
 	return nil, body
 }
 
+func getTracesHavingTag(tag string, searchInterval string) ([]string, error) {
+	return nil, nil
+}
+
+func takeIntersection(a []string, b []string) ([]string, error) {
+	c := []string{}
+	m := make(map[string]bool)
+
+	for _, item := range a {
+		m[item] = true
+	}
+
+	for _, item := range b {
+		if _, ok := m[item]; ok {
+			c = append(c, item)
+		}
+	}
+
+	return c, nil
+}
+
+func filterOnTheChildRelationshipAndTheCondition(traceIds []string, parentSerive string, childService string, condition string) ([]string, error) {
+	return nil, nil
+}
+
+func getTracesWhereXCallsY(x string, y string, condition string, searchInterval string) ([]string, error) {
+	A, err := getTracesHavingTag(x, searchInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	B, err := getTracesHavingTag(y, searchInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	C, err := takeIntersection(A, B)
+	if err != nil {
+		return nil, err
+	}
+
+	D, err := filterOnTheChildRelationshipAndTheCondition(C, x, y, condition)
+	if err != nil {
+		return nil, err
+	}
+
+	return D, nil
+}
+
 func downloadFileIntoMemory(w io.Writer, bucket, object string, client *storage.Client) ([]byte, error) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
@@ -84,4 +133,6 @@ func main() {
 		log.Fatalln(err)
 	}
 	log.Println(string(trace))
+
+	_, _ = getTracesWhereXCallsY("", "", "", "")
 }
