@@ -77,7 +77,7 @@ CONFIG_MATRIX = {
 
 def inject_istio():
     cmd = f"{ISTIO_BIN} install --set profile=demo "
-    cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --skip-confirmation "
+    cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --set values.global.tracer.zipkin.address=otelcollector:9411 --skip-confirmation "
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
