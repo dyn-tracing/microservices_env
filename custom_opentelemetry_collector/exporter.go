@@ -335,7 +335,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
 
 // A helper function that stores spans according to their resource.
 func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
-    num_requests := 0
+    ctx := context.Background()
     rss := traces.ResourceSpans()
     for i := 0; i< rss.Len(); i++ {
         // Here we marshal by resourcespan;  because the groupbyattr processor is always used, we can be confident that
@@ -345,9 +345,6 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
             oneResourceSpans := pdata.NewTraces()
             rss.At(i).CopyTo(oneResourceSpans.ResourceSpans().AppendEmpty())
             buffer, err := ex.tracesMarshaler.MarshalTraces(oneResourceSpans)
-            oneRs := oneResourceSpans.ResourceSpans()
-            ex.logger.Info("len one resource spans", zap.Int("#len", oneResourceSpans.SpanCount()))
-            ex.logger.Info("len scope spans", zap.Int("#len", oneRs.At(0).InstrumentationLibrarySpans().Len()))
             if err != nil {
                 ex.logger.Info("could not marshal traces ", zap.Error(err))
                 return err
@@ -355,9 +352,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
 
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
             bucketName := serviceNameToBucketName(sn.StringVal()) 
-            ex.logger.Info("bucket name is ", zap.String("bucketname: ", bucketName))
             bkt := ex.client.Bucket(bucketName)
-            ctx := context.Background() // TODO:  Is this necessary every iteration?  Can I take it out?
             ret := ex.spanBucketExists(ctx, bucketName)
             if ret != nil {
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
@@ -376,12 +371,10 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
             if err := writer.Close(); err != nil {
                 return fmt.Errorf("failed closing the span object: %w", err)
             }
-            num_requests = num_requests + 1
         } else {
             ex.logger.Info("didn't get service name")
         }
     }
-    ex.logger.Info("num requests", zap.Int("#requests", num_requests))
     return nil
 }
 
