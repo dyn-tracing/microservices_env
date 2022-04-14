@@ -73,6 +73,11 @@ type spanStr struct {
     service string
 }
 
+type spanWithResource struct {
+    span *pdata.Span
+    resource string
+}
+
 type spanBuf struct {
     buf dataBuffer
     id string
@@ -122,13 +127,7 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) hashTraceFuture(ctx context.Context, spans []spanStr, traceID string) (chan error) {
-    future := make (chan error, 1);
-    go func () {future <- ex.hashTrace(ctx, spans, traceID); close(future) } ();
-    return future;
-}
-
-func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) error {
+func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) string {
     var traceHash uint32
     traceHash = 0
     var root int
@@ -167,18 +166,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
             }
         }
     }
-    // computed trace hash;  now need to put that in storage
-    //ex.spanBucketExists(ctx, "tracehashes")
-    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes"))
-    obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
-    w := obj.NewWriter(ctx)
-    if _, err := w.Write([]byte(traceID)); err != nil {
-        return fmt.Errorf("failed creating the trace hash object: %w", err)
-    }
-    if err := w.Close(); err != nil {
-        return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID, err)
-    }
-    return nil
+    return strconv.FormatUint(uint64(traceHash), 10)
 }
 
 
@@ -201,69 +189,6 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
     return err
 }
 
-func (ex *storageExporter) publishSpanFuture(ctx context.Context, data dataBuffer, serviceName string, spanID string) (chan error) {
-    future := make (chan error, 1)
-    go func () { future <- ex.publishSpan(ctx, data, serviceName, spanID); close (future) }();
-    return future;
-
-}
-
-func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string) error {
-    // TODO:  figure out compression
-    /*
-	switch ex.ceCompression {
-	case GZip:
-    	data, err = ex.compress(data)
-		if err != nil {
-			return err
-		}
-	}
-    */
-
-    // bucket will be service name
-    //ex.spanBucketExists(ctx, serviceName)
-    bucketID := serviceNameToBucketName(serviceName)
-    bkt := ex.client.Bucket(bucketID)
-
-    // object will be span ID
-    obj := bkt.Object(spanID)
-    w := obj.NewWriter(ctx)
-    if _, err := w.Write(data.buf.Bytes()); err != nil {
-        return fmt.Errorf("failed creating the span object: %w", err)
-    }
-    if err := w.Close(); err != nil {
-        return fmt.Errorf("failed closing the span object in bucket %s: %w", bucketID, err)
-    }
-	return nil
-}
-
-func (ex *storageExporter) publishTraceFuture(ctx context.Context, spans []spanStr, traceID string) (chan error) {
-    future := make (chan error, 1);
-    go func () { future <- ex.publishTrace(ctx, spans, traceID); close(future) } ();
-    return future;
-}
-
-func (ex *storageExporter) publishTrace(ctx context.Context, spans []spanStr, traceID string) error {
-    traceBuf := dataBuffer{}
-    for i := 0; i < len(spans); i++ {
-        traceBuf.logEntry("%s:%s:%s", spans[i].parent, spans[i].id, spans[i].service)
-    }
-    // now make sure to add it to the trace bucket
-    // we know that trace bucket for sure already exists bc of the start function
-    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
-    ex.spanBucketExists(ctx, trace_bucket)
-
-    trace_obj := trace_bkt.Object(traceID)
-    w_trace := trace_obj.NewWriter(ctx)
-    if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
-        return fmt.Errorf("failed creating the trace object: %w", err)
-    }
-    if err := w_trace.Close(); err != nil {
-        return fmt.Errorf("failed closing the trace object %s: %w", traceID, err)
-    }
-    return nil
-}
-
 func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
 	switch ex.ceCompression {
 	case GZip:
@@ -282,6 +207,7 @@ func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
 	return payload, nil
 }
 
+// This function is used for debugging only
 func (ex *storageExporter) sendDummyData(ctx context.Context, traceID string) error {
     traceBuf := dataBuffer{}
     for i:=0; i<100; i++ {
@@ -289,13 +215,6 @@ func (ex *storageExporter) sendDummyData(ctx context.Context, traceID string) er
     }
 
     trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
-    /*
-    ret := ex.spanBucketExists(ctx, trace_bucket)
-    if ret != nil {
-        return ret
-    }
-    */
-
     trace_obj := trace_bkt.Object(traceID)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
@@ -308,28 +227,84 @@ func (ex *storageExporter) sendDummyData(ctx context.Context, traceID string) er
 }
 
 
-// toook this from tail sampling processor here:
+// took parts of this code from tail sampling processor here:
 // https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/6cb401f1f25d2affcf5a10e737ad1c7e10912206/processor/tailsamplingprocessor/processor.go#L300
-func (ex *storageExporter) groupSpansByTraceKey(resourceSpans pdata.ResourceSpans) map[pdata.TraceID][]*pdata.Span {
-	idToSpans := make(map[pdata.TraceID][]*pdata.Span)
-	ilss := resourceSpans.ScopeSpans()
-	for j := 0; j < ilss.Len(); j++ {
-		spans := ilss.At(j).Spans()
-		spansLen := spans.Len()
-		for k := 0; k < spansLen; k++ {
-			span := spans.At(k)
-			key := span.TraceID()
-			idToSpans[key] = append(idToSpans[key], &span)
-		}
-	}
+func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.TraceID][]spanWithResource {
+	idToSpans := make(map[pdata.TraceID][]spanWithResource)
+    for i := 0; i<traces.ResourceSpans().Len(); i++ {
+        rs := traces.ResourceSpans().At(i)
+        if serviceName, ok := rs.Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+            ilss := rs.InstrumentationLibrarySpans()
+            for j := 0; j < ilss.Len(); j++ {
+                spans := ilss.At(j).Spans()
+                spansLen := spans.Len()
+                for k := 0; k < spansLen; k++ {
+                    span := spans.At(k)
+                    key := span.TraceID()
+                    idToSpans[key] = append(idToSpans[key], spanWithResource {span: &span, resource: serviceName.StringVal()})
+                }
+            }
+        }
+    }
 	return idToSpans
 }
 
 // Stores 2 things in GCS:
 // 1. Trace ID to hash and struct
 // 2. Hash to trace ID
-func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]*pdata.Span) error {
-    // TODO
+func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]spanWithResource) error {
+    // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
+    ctx := context.Background()
+    traceStructBuf := dataBuffer{}
+	hashToTraceID := make(map[string][]string)
+    for traceID, spans := range traceIDToSpans {
+        var sp []spanStr
+        traceStructBuf.logEntry("Trace ID: %s:", traceID)
+        for i := 0; i< len(spans); i++ {
+            parent := spans[i].span.ParentSpanID().HexString()
+            spanID := spans[i].span.SpanID().HexString()
+            resource := spans[i].resource
+            traceStructBuf.logEntry("%s:%s:%s", parent, spanID, resource)
+            sp = append(sp, spanStr{
+               parent: parent,
+               id: spanID,
+               service: resource})
+        }
+        hash := ex.hashTrace(ctx, sp, traceID.HexString())
+        hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
+    }
+    // 2. Put the trace structure buffer in storage
+    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
+    ex.spanBucketExists(ctx, trace_bucket)
+
+    now := strconv.FormatInt(time.Now().Unix(), 10)
+    objectName := strconv.FormatUint(uint64(hash(now)), 10)
+    trace_obj := trace_bkt.Object(objectName)
+    w_trace := trace_obj.NewWriter(ctx)
+    if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
+        return fmt.Errorf("failed creating the trace object: %w", err)
+    }
+    if err := w_trace.Close(); err != nil {
+        return fmt.Errorf("failed closing the trace object %w", err)
+    }
+
+    // 3. Put the hash to trace ID mapping in storage
+    ex.spanBucketExists(ctx, "tracehashes")
+    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes"))
+    for hash, traces := range hashToTraceID {
+        traceIDs := dataBuffer{}
+        for i :=0; i<len(traces); i++ {
+            traceIDs.logEntry("%s", traces[i])
+        }
+        obj := bkt.Object(hash+"/"+objectName+"/"+now) 
+        w := obj.NewWriter(ctx)
+        if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
+            return fmt.Errorf("failed creating the object: %w", err)
+        }
+        if err := w.Close(); err != nil {
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+now, err)
+        }
+    }
     return nil
 }
 
@@ -389,22 +364,12 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
         ex.logger.Error("error storing spans %s", zap.NamedError("error", ret))
         return ret
     }
-    return nil
-    /*
-    now := strconv.FormatInt(time.Now().Unix(), 10)
-    objectName := strconv.FormatUint(uint64(hash(now)), 10)
-    return ex.sendDummyData(context.Background(), objectName)
-    */
-
-
-
-    /*
     // 2. push trace structure as well as the hash of the structure to storage
     // 2a. Create a mapping from trace ID to each of the spans in the trace
-    traceIDToSpans := groupSpansByTraceKey(traces.ResourceSpans)
-    ret :=  ex.storeHashAndStruct(traceIDToSpans)
+    traceIDToSpans := ex.groupSpansByTraceKey(traces)
+    ret =  ex.storeHashAndStruct(traceIDToSpans)
     if ret != nil {
-        ex.logger.Err("error storing trace structure and hash %s", zap.NamedError("error", ret))
+        ex.logger.Error("error storing trace structure and hash %s", zap.NamedError("error", ret))
     }
-    */
+    return nil
 }
