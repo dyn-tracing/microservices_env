@@ -121,7 +121,6 @@ def start_kubernetes(platform, multizonal, application, cluster_name):
             cmd += "us-central1-c us-central1-a "
         else:
             cmd += "--zone=us-central1-a "
-        print(cmd)
         result = util.exec_process(cmd)
         cmd = f"gcloud services enable container.googleapis.com --project {PROJECT_ID} && "
         cmd += f"gcloud services enable monitoring.googleapis.com cloudtrace.googleapis.com "
