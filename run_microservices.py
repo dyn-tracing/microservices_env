@@ -29,12 +29,12 @@ TRAIN_TICKET_DIR = APP_DIR.joinpath(
 PROJECT_ID = "dynamic-tracing"
 APPLY_CMD = "kubectl apply -f "
 DELETE_CMD = "kubectl delete -f "
+CLUSTER_CREATE = "gcloud container clusters create "
 
 CONFIG_MATRIX = {
     'BK': {
         'minikube_startup_command': "minikube start --cpus=2 --memory 4096 --disk-size 32g",
-        'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
-                                  --num-nodes=5 ",
+        'gcloud_flags': f" --enable-autoupgrade --num-nodes=5 ",
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {YAML_DIR}/bookinfo-services.yaml && \
                         {APPLY_CMD} {YAML_DIR}/bookinfo-apps.yaml && \
@@ -44,7 +44,7 @@ CONFIG_MATRIX = {
     },
     'OB': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
-        'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+        'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  && \
@@ -56,7 +56,7 @@ CONFIG_MATRIX = {
     },
     'LG': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
-        'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+        'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {APP_DIR}/load_manifests ",
@@ -64,8 +64,7 @@ CONFIG_MATRIX = {
     },
     'TT': {
         'minikube_startup_command': None,
-        'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
-                                  --num-nodes=5 ",
+        'gcloud_flags': f" --enable-autoupgrade --num-nodes=5 ",
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; " +
                       f"{ISTIO_BIN} kube-inject -f {TRAIN_TICKET_DIR}/ts-deployment-part1.yml > dpl1.yml && " +
                       f"{APPLY_CMD} dpl1.yml && " +
@@ -114,14 +113,15 @@ def check_kubernetes_status():
     return result
 
 
-def start_kubernetes(platform, multizonal, application):
+def start_kubernetes(platform, multizonal, application, cluster_name):
     if platform == "GCP":
-        cmd = CONFIG_MATRIX[application]['gcloud_startup_command']
+        cmd = CLUSTER_CREATE + cluster_name + CONFIG_MATRIX[application]['gcloud_flags']
         if multizonal:
             cmd += "--region us-central1-a --node-locations us-central1-b "
             cmd += "us-central1-c us-central1-a "
         else:
             cmd += "--zone=us-central1-a "
+        print(cmd)
         result = util.exec_process(cmd)
         cmd = f"gcloud services enable container.googleapis.com --project {PROJECT_ID} && "
         cmd += f"gcloud services enable monitoring.googleapis.com cloudtrace.googleapis.com "
@@ -142,10 +142,10 @@ def start_kubernetes(platform, multizonal, application):
     return result
 
 
-def stop_kubernetes(platform):
+def stop_kubernetes(platform, cluster_name):
     if platform == "GCP":
-        cmd = "gcloud container clusters delete "
-        cmd += "demo --zone us-central1-a --quiet "
+        cmd = f"gcloud container clusters delete "
+        cmd += f"{cluster_name} --zone us-central1-a --quiet "
     else:
         # delete minikube
         cmd = "minikube delete"
@@ -183,7 +183,7 @@ def get_gateway_info(platform):
 
 ################### APPLICATION SPECIFIC FUNCTIONS ###########################
 
-def deploy_application(application):
+def deploy_application(application, cluster_name):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
@@ -220,14 +220,14 @@ def remove_application(application):
     return result
 
 
-def setup_application_deployment(platform, multizonal, application):
-    result = start_kubernetes(platform, multizonal, application)
+def setup_application_deployment(platform, multizonal, application, cluster_name):
+    result = start_kubernetes(platform, multizonal, application, cluster_name)
     if result != util.EXIT_SUCCESS:
         return result
     result = inject_istio()
     if result != util.EXIT_SUCCESS:
         return result
-    result = deploy_application(application)
+    result = deploy_application(application, cluster_name)
     if result != util.EXIT_SUCCESS:
         return result
     return result
@@ -236,13 +236,13 @@ def setup_application_deployment(platform, multizonal, application):
 def main(args):
     # single commands to execute
     if args.setup:
-        return setup_application_deployment(args.platform, args.multizonal, args.application)
+        return setup_application_deployment(args.platform, args.multizonal, args.application, args.cluster_name)
     if args.deploy_application:
         return deploy_application(args.application)
     if args.remove_application:
         return remove_application(args.application)
     if args.clean:
-        return stop_kubernetes(args.platform)
+        return stop_kubernetes(args.platform, args.cluster_name)
 
 
 if __name__ == '__main__':
@@ -273,6 +273,11 @@ if __name__ == '__main__':
                         choices=["BK", "OB", "LG", "TT"],
                         help="Which application to deploy."
                         "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, and TT is Train Ticket")
+    parser.add_argument("-cn",
+                        "--cluster-name",
+                        dest="cluster_name",
+                        default="demo",
+                        help="Name of the GCP cluster to create")
     parser.add_argument("-m",
                         "--multi-zonal",
                         dest="multizonal",
