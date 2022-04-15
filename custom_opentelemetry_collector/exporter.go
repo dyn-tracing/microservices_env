@@ -21,6 +21,7 @@ import (
 	"fmt"
     "strings"
     "strconv"
+    "time"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
@@ -72,12 +73,29 @@ type spanStr struct {
     service string
 }
 
+type spanWithResource struct {
+    span *pdata.Span
+    resource string
+}
+
 // https://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
 func hash(s string) uint32 {
         h := fnv.New32a()
         h.Write([]byte(s))
         return h.Sum32()
 }
+
+func serviceNameToBucketName(serviceName string) string {
+    // TODO: is this the best way to get it into a format for bucket names?
+    // There is probably a more robust way
+    bucketID := strings.ReplaceAll(serviceName, ".", "")
+    bucketID = strings.ReplaceAll(bucketID, "/", "")
+    bucketID = strings.ReplaceAll(bucketID, "google", "")
+    bucketID = strings.ReplaceAll(bucketID, "_", "")
+    bucketID = strings.ToLower(bucketID)
+    return bucketID + "-snicket"
+}
+
 
 func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 	ctx, ex.cancel = context.WithCancel(ctx)
@@ -103,7 +121,7 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) error {
+func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) string {
     var traceHash uint32
     traceHash = 0
     var root int
@@ -142,31 +160,9 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
             }
         }
     }
-    // computed trace hash;  now need to put that in storage
-    ex.spanBucketExists(ctx, "tracehashes")
-    bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, "tracehashes"))
-    obj := bkt.Object(strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID) // should this be 64 from the beginning?
-    w := obj.NewWriter(ctx)
-    if _, err := w.Write([]byte(traceID)); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
-    }
-    if err := w.Close(); err != nil {
-        return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(traceHash), 10)+"/"+traceID, err)
-    }
-    return nil
+    return strconv.FormatUint(uint64(traceHash), 10)
 }
 
-
-func (ex *storageExporter) serviceNameToBucketName(ctx context.Context, serviceName string) string {
-    // TODO: is this the best way to get it into a format for bucket names?
-    // There is probably a more robust way
-    bucketID := strings.ReplaceAll(serviceName, ".", "")
-    bucketID = strings.ReplaceAll(bucketID, "/", "")
-    bucketID = strings.ReplaceAll(bucketID, "google", "")
-    bucketID = strings.ReplaceAll(bucketID, "_", "")
-    bucketID = strings.ToLower(bucketID)
-    return bucketID + "-snicket"
-}
 
 func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
     storageClassAndLocation := &storage.BucketAttrs{
@@ -174,7 +170,7 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
 		Location:     "US",
         LocationType: "region",
 	}
-    bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, serviceName))
+    bkt := ex.client.Bucket(serviceNameToBucketName(serviceName))
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
         if err := bkt.Create(ctx, ex.config.ProjectID, storageClassAndLocation); err != nil {
@@ -182,62 +178,9 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
         }
     }
     if err != nil {
-        return fmt.Errorf("failed getting bucket attributes: %w", err)
+        return fmt.Errorf("failed getting bucket attributes: %s %w", serviceName, err)
     }
     return err
-}
-
-func (ex *storageExporter) publishSpan(ctx context.Context, data dataBuffer, serviceName string, spanID string) error {
-    var err error
-
-    // TODO:  figure out compression
-    /*
-	switch ex.ceCompression {
-	case GZip:
-    	data, err = ex.compress(data)
-		if err != nil {
-			return err
-		}
-	}
-    */
-
-    // bucket will be service name
-    ex.spanBucketExists(ctx, serviceName)
-    bucketID := ex.serviceNameToBucketName(ctx, serviceName)
-    bkt := ex.client.Bucket(bucketID)
-
-    // object will be span ID
-    obj := bkt.Object(spanID)
-    w := obj.NewWriter(ctx)
-    if _, err := w.Write(data.buf.Bytes()); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
-    }
-    if err := w.Close(); err != nil {
-        return fmt.Errorf("failed closing the span object in bucket %s: %w", bucketID, err)
-    }
-
-	return err
-}
-
-func (ex *storageExporter) publishTrace(ctx context.Context, spans []spanStr, traceID string) error {
-    traceBuf := dataBuffer{}
-    for i := 0; i < len(spans); i++ {
-        traceBuf.logEntry("%s:%s:%s", spans[i].parent, spans[i].id, spans[i].service)
-    }
-    // now make sure to add it to the trace bucket
-    // we know that trace bucket for sure already exists bc of the start function
-    trace_bkt := ex.client.Bucket(ex.serviceNameToBucketName(ctx, trace_bucket))
-    ex.spanBucketExists(ctx, trace_bucket)
-
-    trace_obj := trace_bkt.Object(traceID)
-    w_trace := trace_obj.NewWriter(ctx)
-    if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
-        return fmt.Errorf("failed creating the object: %w", err)
-    }
-    if err := w_trace.Close(); err != nil {
-        return fmt.Errorf("failed closing the trace object %s: %w", traceID, err)
-    }
-    return nil
 }
 
 func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
@@ -258,53 +201,170 @@ func (ex *storageExporter) compress(payload []byte) ([]byte, error) {
 	return payload, nil
 }
 
-func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
-    // citation:  stole the structure of this code from https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/honeycombexporter/honeycomb.go and from https://github.com/open-telemetry/opentelemetry-collector/blob/0afea3faaac826d9b122046c68dbaae1e2a64ff5/internal/otlptext/traces.go#L29
-    var traceID string
-    var sp []spanStr
+// This function is used for debugging only
+func (ex *storageExporter) sendDummyData(ctx context.Context, traceID string) error {
+    traceBuf := dataBuffer{}
+    for i:=0; i<100; i++ {
+        traceBuf.logEntry("Number #%d", i)
+    }
 
-	rss := traces.ResourceSpans()
-	for i := 0; i < rss.Len(); i++ {
-		rs := rss.At(i)
-        r := rs.Resource()
+    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
+    trace_obj := trace_bkt.Object(traceID)
+    w_trace := trace_obj.NewWriter(ctx)
+    if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
+        return fmt.Errorf("failed creating the trace object: %s %w", traceID, err)
+    }
+    if err := w_trace.Close(); err != nil {
+        return fmt.Errorf("failed closing the trace object: %s %w", traceID, err)
+    }
+    return nil
+}
 
-        // TODO:  somehow incorporate resource attrs
 
-		if serviceName, ok := r.Attributes().Get(conventions.AttributeServiceName); ok {
-            ex.spanBucketExists(ctx, serviceName.StringVal())
-            ex.spanBucketExists(ctx, trace_bucket) // TODO:  why isn't this executing?
+// took parts of this code from tail sampling processor here:
+// https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/6cb401f1f25d2affcf5a10e737ad1c7e10912206/processor/tailsamplingprocessor/processor.go#L300
+func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.TraceID][]spanWithResource {
+	idToSpans := make(map[pdata.TraceID][]spanWithResource)
+    for i := 0; i<traces.ResourceSpans().Len(); i++ {
+        rs := traces.ResourceSpans().At(i)
+        if serviceName, ok := rs.Resource().Attributes().Get(conventions.AttributeServiceName); ok {
             ilss := rs.InstrumentationLibrarySpans()
             for j := 0; j < ilss.Len(); j++ {
-                ils := ilss.At(j)
-                // Buffer is created here because at this point, all the spans are from the same instrumentation library.
-                // So this is essentially the same trace point
-                spans := ils.Spans()
-                for k := 0; k < spans.Len(); k++ {
-                    buf := dataBuffer{}
-                    buf.logEntry("Span #%d", k)
+                spans := ilss.At(j).Spans()
+                spansLen := spans.Len()
+                for k := 0; k < spansLen; k++ {
                     span := spans.At(k)
-                    buf.logAttr("Trace ID", span.TraceID().HexString())
-                    traceID = span.TraceID().HexString()
-                    buf.logAttr("Parent ID", span.ParentSpanID().HexString())
-                    buf.logAttr("ID", span.SpanID().HexString())
-                    buf.logAttr("Name", span.Name())
-                    buf.logAttr("Kind", span.Kind().String())
-                    buf.logAttr("Start time", span.StartTimestamp().String())
-                    buf.logAttr("End time", span.EndTimestamp().String())
-
-                    buf.logAttr("Status code", span.Status().Code().String())
-                    buf.logAttr("Status message", span.Status().Message())
-
-                    buf.logAttributeMap("Attributes", span.Attributes())
-                    buf.logEvents("Events", span.Events())
-                    buf.logLinks("Links", span.Links())
-                    sp = append(sp, spanStr{parent: span.ParentSpanID().HexString(), id: span.SpanID().HexString(), service: serviceName.StringVal()})
-                    ex.publishSpan(ctx, buf, serviceName.StringVal(), span.SpanID().HexString())
+                    key := span.TraceID()
+                    idToSpans[key] = append(idToSpans[key], spanWithResource {span: &span, resource: serviceName.StringVal()})
                 }
             }
-		}
-	}
-    // TODO: we could probably do the two following things in parallel to speed things up
-    ex.hashTrace(ctx, sp, traceID)
-    return ex.publishTrace(ctx, sp, traceID)
+        }
+    }
+	return idToSpans
+}
+
+// Stores 2 things in GCS:
+// 1. Trace ID to hash and struct
+// 2. Hash to trace ID
+func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]spanWithResource) error {
+    // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
+    ctx := context.Background()
+    traceStructBuf := dataBuffer{}
+	hashToTraceID := make(map[string][]string)
+    for traceID, spans := range traceIDToSpans {
+        var sp []spanStr
+        traceStructBuf.logEntry("Trace ID: %s:", traceID)
+        for i := 0; i< len(spans); i++ {
+            parent := spans[i].span.ParentSpanID().HexString()
+            spanID := spans[i].span.SpanID().HexString()
+            resource := spans[i].resource
+            traceStructBuf.logEntry("%s:%s:%s", parent, spanID, resource)
+            sp = append(sp, spanStr{
+               parent: parent,
+               id: spanID,
+               service: resource})
+        }
+        hash := ex.hashTrace(ctx, sp, traceID.HexString())
+        hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
+    }
+    // 2. Put the trace structure buffer in storage
+    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
+    ex.spanBucketExists(ctx, trace_bucket)
+
+    now := strconv.FormatInt(time.Now().Unix(), 10)
+    objectName := strconv.FormatUint(uint64(hash(now)), 10)
+    trace_obj := trace_bkt.Object(objectName)
+    w_trace := trace_obj.NewWriter(ctx)
+    if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
+        return fmt.Errorf("failed creating the trace object: %w", err)
+    }
+    if err := w_trace.Close(); err != nil {
+        return fmt.Errorf("failed closing the trace object %w", err)
+    }
+
+    // 3. Put the hash to trace ID mapping in storage
+    ex.spanBucketExists(ctx, "tracehashes")
+    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes"))
+    for hash, traces := range hashToTraceID {
+        traceIDs := dataBuffer{}
+        for i :=0; i<len(traces); i++ {
+            traceIDs.logEntry("%s", traces[i])
+        }
+        obj := bkt.Object(hash+"/"+objectName+"/"+now)
+        w := obj.NewWriter(ctx)
+        if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
+            return fmt.Errorf("failed creating the object: %w", err)
+        }
+        if err := w.Close(); err != nil {
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+now, err)
+        }
+    }
+    return nil
+}
+
+// A helper function that stores spans according to their resource.
+func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
+    ctx := context.Background()
+    rss := traces.ResourceSpans()
+    for i := 0; i< rss.Len(); i++ {
+        // Here we marshal by resourcespan;  because the groupbyattr processor is always used, we can be confident that
+        // they have been grouped by resource already.
+        // 1. Marshal the spans from the same resource into a buffer
+		if sn, ok := rss.At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+            oneResourceSpans := pdata.NewTraces()
+            rss.At(i).CopyTo(oneResourceSpans.ResourceSpans().AppendEmpty())
+            buffer, err := ex.tracesMarshaler.MarshalTraces(oneResourceSpans)
+            if err != nil {
+                ex.logger.Info("could not marshal traces ", zap.Error(err))
+                return err
+            }
+
+            // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
+            bucketName := serviceNameToBucketName(sn.StringVal()) 
+            bkt := ex.client.Bucket(bucketName)
+            ret := ex.spanBucketExists(ctx, sn.StringVal())
+            if ret != nil {
+                ex.logger.Info("span bucket exists error ", zap.Error(ret))
+                return ret
+            }
+            // 3. Determine the name of the new object;  for now, this is a hash of the current time
+            //    TODO: I'll make it more meaningful once I see whether this works
+            now := strconv.FormatInt(time.Now().Unix(), 10)
+            objectName := strconv.FormatUint(uint64(hash(now)), 10)
+
+            // 4. Send the data under that bucket/object name to storage
+            obj := bkt.Object(objectName)
+            writer := obj.NewWriter(ctx)
+            if _, err := writer.Write(buffer); err != nil {
+                return fmt.Errorf("failed creating the span object: %w", err)
+            }
+            if err := writer.Close(); err != nil {
+                return fmt.Errorf("failed closing the span object: %w", err)
+            }
+        } else {
+            ex.logger.Info("didn't get service name")
+        }
+    }
+    return nil
+}
+
+
+// This is the main function of the exporter.  It is called by consumers
+// to process trace data and send it to GCS.
+func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
+    // once you have a batch, there are two things you must do with it:
+    // 1. push spans to storage
+    ret := ex.storeSpans(traces)
+    if ret != nil {
+        ex.logger.Error("error storing spans %s", zap.NamedError("error", ret))
+        return ret
+    }
+    // 2. push trace structure as well as the hash of the structure to storage
+    // 2a. Create a mapping from trace ID to each of the spans in the trace
+    traceIDToSpans := ex.groupSpansByTraceKey(traces)
+    ret =  ex.storeHashAndStruct(traceIDToSpans)
+    if ret != nil {
+        ex.logger.Error("error storing trace structure and hash %s", zap.NamedError("error", ret))
+    }
+    return nil
 }

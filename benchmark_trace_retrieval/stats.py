@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.stats as st
 
-with open("out300.txt") as f:
+with open("twelveEightThousandRunning.txt") as f:
     lines = f.read().split("\n")
     data_arrays = {}
     for line in lines:

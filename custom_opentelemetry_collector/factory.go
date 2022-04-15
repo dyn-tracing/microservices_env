@@ -35,10 +35,10 @@ const (
 
 // NewFactory creates a factory for Google Cloud Storage exporter.
 func NewFactory() component.ExporterFactory {
-	return exporterhelper.NewFactory(
+	return component.NewExporterFactory(
 		typeStr,
 		createDefaultConfig,
-		exporterhelper.WithTraces(createTracesExporter))
+        component.WithTracesExporter(createTracesExporter))
 }
 
 var exporters = map[*Config]*storageExporter{}
@@ -67,6 +67,8 @@ func createDefaultConfig() config.Exporter {
 		ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
 		UserAgent:        "opentelemetry-collector-contrib {{version}}",
 		TimeoutSettings:  exporterhelper.TimeoutSettings{Timeout: defaultTimeout},
+        //RetrySettings:    exporterhelper.DefaultRetrySettings(),
+        //QueueSettings:    exporterhelper.DefaultQueueSettings(),
 	}
 }
 
