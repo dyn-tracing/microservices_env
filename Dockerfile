@@ -11,7 +11,6 @@ RUN go get go.opentelemetry.io/collector/internal/obsreportconfig/obsmetrics@v0.
 RUN go get go.opentelemetry.io/collector/component
 COPY docker_builder.yaml docker_builder.yaml
 COPY ./custom_opentelemetry_collector ./custom_opentelemetry_collector
-COPY ./hashexporter ./hashexporter
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 RUN go install go.opentelemetry.io/collector/cmd/builder@latest

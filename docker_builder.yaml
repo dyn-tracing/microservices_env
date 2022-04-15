@@ -21,8 +21,6 @@ extensions:
 exporters:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter v0.0.0"
     path: "../custom_opentelemetry_collector"
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/hashexporter v0.0.0"
-    path: "../hashexporter"
   - import: go.opentelemetry.io/collector/exporter/loggingexporter
     gomod: go.opentelemetry.io/collector v0.48.0
   - import: go.opentelemetry.io/collector/exporter/otlpexporter
