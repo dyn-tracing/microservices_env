@@ -78,12 +78,6 @@ type spanWithResource struct {
     resource string
 }
 
-type spanBuf struct {
-    buf dataBuffer
-    id string
-    service string
-}
-
 // https://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
 func hash(s string) uint32 {
         h := fnv.New32a()
