@@ -296,7 +296,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
         for i :=0; i<len(traces); i++ {
             traceIDs.logEntry("%s", traces[i])
         }
-        obj := bkt.Object(hash+"/"+objectName+"/"+now) 
+        obj := bkt.Object(hash+"/"+objectName+"/"+now)
         w := obj.NewWriter(ctx)
         if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
             return fmt.Errorf("failed creating the object: %w", err)
@@ -328,7 +328,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
             bucketName := serviceNameToBucketName(sn.StringVal()) 
             bkt := ex.client.Bucket(bucketName)
-            ret := ex.spanBucketExists(ctx, bucketName)
+            ret := ex.spanBucketExists(ctx, sn.StringVal())
             if ret != nil {
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
@@ -337,6 +337,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
             //    TODO: I'll make it more meaningful once I see whether this works
             now := strconv.FormatInt(time.Now().Unix(), 10)
             objectName := strconv.FormatUint(uint64(hash(now)), 10)
+
             // 4. Send the data under that bucket/object name to storage
             obj := bkt.Object(objectName)
             writer := obj.NewWriter(ctx)
