@@ -43,21 +43,30 @@ CONFIG_MATRIX = {
     },
     'OB': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
-        'gcloud_startup_command':"gcloud container clusters create jess-cluster --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+        'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/load_manifests ",
-                        #{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
-                        #{APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  && \
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  && \
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests && \
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  ",
         'undeploy_cmd': f"{DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/istio_manifests && \
                           {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests && \
                           {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
+    },
+    'LG': {
+        'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
+        'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+                                  --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
+        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
+                        {APPLY_CMD} {APP_DIR}/load_manifests ",
+        'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_manifests "
     },
     'TT': {
         'minikube_startup_command': None,
         'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
                                   --num-nodes=5 ",
-        'deploy_cmd': f"{ISTIO_BIN} kube-inject -f {TRAIN_TICKET_DIR}/ts-deployment-part1.yml > dpl1.yml && " +
+        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; " +
+                      f"{ISTIO_BIN} kube-inject -f {TRAIN_TICKET_DIR}/ts-deployment-part1.yml > dpl1.yml && " +
                       f"{APPLY_CMD} dpl1.yml && " +
                       f"{ISTIO_BIN} kube-inject -f {TRAIN_TICKET_DIR}/ts-deployment-part2.yml > dpl2.yml && " +
                       f"{APPLY_CMD} dpl2.yml && " +
@@ -135,7 +144,7 @@ def start_kubernetes(platform, multizonal, application):
 def stop_kubernetes(platform):
     if platform == "GCP":
         cmd = "gcloud container clusters delete "
-        cmd += "jess-cluster --zone us-central1-a --quiet "
+        cmd += "demo --zone us-central1-a --quiet "
     else:
         # delete minikube
         cmd = "minikube delete"
@@ -260,9 +269,9 @@ if __name__ == '__main__':
                         "--application",
                         dest="application",
                         default="BK",
-                        choices=["BK", "OB", "TT"],
+                        choices=["BK", "OB", "LG", "TT"],
                         help="Which application to deploy."
-                        "BK is Bookinfo, OB is Online Boutique, and TT is Train Ticket")
+                        "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, and TT is Train Ticket")
     parser.add_argument("-m",
                         "--multi-zonal",
                         dest="multizonal",
