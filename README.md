@@ -22,5 +22,44 @@ By default, this runs on Minikube.  To run on Google Cloud Platform, run with th
 
 The collector by default stores traces within Cloud Storage.
 
+## Commands to run the application with the collector on GCP
+The following commands are run under the folder /microservices_env.
+
+First, to deploy the application, do
+```
+python3 run_microservices.py -p GCP -s
+```
+Then, check the status of the pods and wait until all pods are running by doing
+```
+kubectl get pods
+```
+Note: Record the name of the pod with the format "otelcollector-<some_hash>" to check the otelcollector logs in the later steps.
+
+To determine the ingress ip and ports, run the following commands
+```
+export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].port}')
+export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].port}')
+export TCP_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="tcp")].port}')
+```
+Now, check the ingress IP and ports by
+```
+echo $INGRESS_HOST $INGRESS_PORT
+```
+At this step, you are all set to visit the product page of Bookinfo by going to $INGRESS_HOST:$INGRESS_PORT/productpage on your browser. The two variables are obtained through the previous step.
+
+After visiting the page, check the otelcollector log by running
+```
+kubectl logs otelcollector-<some_hash>
+```
+If you see output from the logging exporter, then the collector is receiving traces.
+
+Note: The otelcollector-<some_hash> is the pod name with the format "otelcollector-<some_hash>" that you recorded from the output of "kubectl get pods".
+
+Finally, to clear the cluster, simply do
+```
+python3 run_microservices.py -p GCP -c
+```
+
 ### Other Notes
 The version of Online Boutique in this repository is found here:  https://github.com/julianocosta89/opentelemetry-microservices-demo.  It was edited only to allow it to run the kubernetes manifests independently through giving it absolute image names instead of relative.
