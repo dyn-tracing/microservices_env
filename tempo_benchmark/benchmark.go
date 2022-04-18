@@ -2,19 +2,41 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	"cloud.google.com/go/storage"
 )
 
-const TempoQueryAddr = "http://34.70.37.67:16686/"
+type TraceResult struct {
+	TraceID           string
+	RootServiceName   string
+	DurationMs        int
+	StartTimeUnixNano string
+}
+
+type MetricsResult struct {
+	InspectedTraces int
+	InspectedBytes  string
+	InspectedBlocks int
+}
+
+type SearchResult struct {
+	Traces  []TraceResult
+	Metrics MetricsResult
+}
+
+const TempoQueryAddr = "http://35.239.124.40:16686/"
+const TempoAPIAddr = "http://35.239.124.40:3200/"
 const GetTraceEndpoint = "api/traces/"
+const TempoSearchEndpoint = "api/search"
 
 func getTrace(traceId string) (error, []byte) {
 	resp, err := http.Get(TempoQueryAddr + GetTraceEndpoint + traceId)
@@ -38,7 +60,38 @@ func getTrace(traceId string) (error, []byte) {
 }
 
 func getTracesHavingTag(tag string, searchInterval string) ([]string, error) {
-	return nil, nil
+	endTime := time.Now().Local().Unix()
+	startTime := endTime - 3600
+
+	addr := TempoAPIAddr + TempoSearchEndpoint + "?tags=" + tag + "%20start%3D" + strconv.FormatInt(startTime, 10) + "%20end%3D" + strconv.FormatInt(endTime, 10)
+
+	log.Println("addr: ", addr)
+	resp, err := http.Get(addr)
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+		return nil, err
+	}
+
+	var result SearchResult
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		log.Fatalln(err)
+		return nil, err
+	}
+
+	var traceIds []string
+	for _, trace := range result.Traces {
+		traceIds = append(traceIds, trace.TraceID)
+	}
+
+	return traceIds, nil
 }
 
 func takeIntersection(a []string, b []string) ([]string, error) {
@@ -59,16 +112,17 @@ func takeIntersection(a []string, b []string) ([]string, error) {
 }
 
 func filterOnTheChildRelationshipAndTheCondition(traceIds []string, parentSerive string, childService string, condition string) ([]string, error) {
+	log.Println(traceIds)
 	return nil, nil
 }
 
 func getTracesWhereXCallsY(x string, y string, condition string, searchInterval string) ([]string, error) {
-	A, err := getTracesHavingTag(x, searchInterval)
+	A, err := getTracesHavingTag("service.name%3D"+x+"%20limit%3D1000", searchInterval)
 	if err != nil {
 		return nil, err
 	}
 
-	B, err := getTracesHavingTag(y, searchInterval)
+	B, err := getTracesHavingTag("service.name%3D"+y+"%20limit%3D1000", searchInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -128,11 +182,13 @@ func uploadDataToGCS(w io.Writer, data string) (int, error) {
 }
 
 func main() {
-	err, trace := getTrace("7cd39c7f87b4c84fbea56d3a7c049d05")
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Println(string(trace))
 
-	_, _ = getTracesWhereXCallsY("", "", "", "")
+	// err, trace := getTrace("7cd39c7f87b4c84fbea56d3a7c049d05")
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+	// log.Println(string(trace))
+
+	_, _ = getTracesWhereXCallsY("checkoutservice", "cartservice", "", "1h")
+
 }
