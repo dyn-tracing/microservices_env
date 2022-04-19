@@ -201,7 +201,7 @@ def deploy_application(application):
             continue
         if "front" in depl:
             cmd = f"kubectl autoscale {depl} --min=20 --max=30 --cpu-percent=40"
-        elif "otel" in depl:
+        elif "otel" in depl or "tracegen" in depl:
             pass
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
@@ -212,6 +212,23 @@ def deploy_application(application):
 
     return result
 
+def load_test(num_tracegens):
+    if check_kubernetes_status() != util.EXIT_SUCCESS:
+        log.error("Kubernetes is not set up."
+                  " Did you run the deployment script?")
+        sys.exit(util.EXIT_FAILURE)
+    cmd = "kubectl get deployments -o name "
+    deployments = util.get_output_from_proc(cmd).decode("utf-8").strip()
+    deployments = deployments.split("\n")
+    log.info("Starting load test")
+    for depl in deployments:
+        if "tracegen" in depl:
+            cmd = f"kubectl autoscale {depl} --min={num_tracegens} --max={num_tracegens} --cpu-percent=40"
+            result = util.exec_process(cmd)
+            if result != util.EXIT_SUCCESS:
+                return result
+    application_wait()
+    return result
 
 def remove_application(application):
     cmd = CONFIG_MATRIX[application]['undeploy_cmd']
@@ -239,6 +256,8 @@ def main(args):
         return setup_application_deployment(args.platform, args.multizonal, args.application)
     if args.deploy_application:
         return deploy_application(args.application)
+    if args.load_test:
+        return load_test(args.load_test)
     if args.remove_application:
         return remove_application(args.application)
     if args.clean:
@@ -301,6 +320,10 @@ if __name__ == '__main__':
                         dest="remove_application",
                         action="store_true",
                         help="remove the app. ")
+    parser.add_argument("-lt",
+                        "--load-test",
+                        dest="load_test",
+                        help="do load testing with this many thousand traces per second")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
