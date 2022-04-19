@@ -33,8 +33,36 @@ type SearchResult struct {
 	Metrics MetricsResult
 }
 
-const TempoQueryAddr = "http://35.239.124.40:16686/"
-const TempoAPIAddr = "http://35.239.124.40:3200/"
+type Reference struct {
+	RefType string
+	TraceID string
+	SpanID  string
+}
+
+type Tag struct {
+	Key   string
+	Type  string
+	Value string
+}
+
+type Log struct {
+}
+
+type Span struct {
+	TraceID       string
+	SpanID        string
+	OperationName string
+	References    []Reference
+	StartTime     int64
+	Duration      int64
+	Tags          []Tag
+	Logs          []Log
+	ProcessID     string
+	Warnings      nil
+}
+
+const TempoQueryAddr = "http://34.134.224.33:16686/"
+const TempoAPIAddr = "http://34.134.224.33:3200/"
 const GetTraceEndpoint = "api/traces/"
 const TempoSearchEndpoint = "api/search"
 
@@ -59,13 +87,13 @@ func getTrace(traceId string) (error, []byte) {
 	return nil, body
 }
 
-func getTracesHavingTag(tag string, searchInterval string) ([]string, error) {
+func getTracesHavingTag(tag string, searchIntervalInSeconds int64) ([]string, error) {
 	endTime := time.Now().Local().Unix()
-	startTime := endTime - 3600
+	startTime := endTime - searchIntervalInSeconds
 
-	addr := TempoAPIAddr + TempoSearchEndpoint + "?tags=" + tag + "%20start%3D" + strconv.FormatInt(startTime, 10) + "%20end%3D" + strconv.FormatInt(endTime, 10)
+	addr := TempoAPIAddr + TempoSearchEndpoint + "?tags=" + tag + "&start=" + strconv.FormatInt(startTime, 10) + "&end=" + strconv.FormatInt(endTime, 10)
+	log.Println(addr)
 
-	log.Println("addr: ", addr)
 	resp, err := http.Get(addr)
 	if err != nil {
 		log.Fatal(err)
@@ -73,6 +101,7 @@ func getTracesHavingTag(tag string, searchInterval string) ([]string, error) {
 	}
 	defer resp.Body.Close()
 
+	log.Println(resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatalln(err)
@@ -111,33 +140,79 @@ func takeIntersection(a []string, b []string) ([]string, error) {
 	return c, nil
 }
 
-func filterOnTheChildRelationshipAndTheCondition(traceIds []string, parentSerive string, childService string, condition string) ([]string, error) {
-	log.Println(traceIds)
-	return nil, nil
+func doesTraceSatisfiesTheRelationship(traceId string, parentSerive string, childService string) (bool, error) {
+	err, traceBytes := getTrace(traceId)
+	if err != nil {
+		log.Fatal(err)
+		return false, err
+	}
+
+	var trace map[string]interface{}
+	json.Unmarshal(traceBytes, &trace)
+
+	return false, nil
 }
 
-func getTracesWhereXCallsY(x string, y string, condition string, searchInterval string) ([]string, error) {
-	A, err := getTracesHavingTag("service.name%3D"+x+"%20limit%3D1000", searchInterval)
+func filterOnTheChildRelationship(traceIds []string, parentSerive string, childService string) ([]string, error) {
+	result := []string{}
+
+	for _, traceId := range traceIds {
+		ok, err := doesTraceSatisfiesTheRelationship(traceId, parentSerive, childService)
+		if err != nil {
+			log.Fatal(err)
+			return nil, err
+		}
+
+		if ok {
+			result = append(result, traceId)
+		}
+	}
+
+	return result, nil
+}
+
+func getTracesWhereXCallsY(x string, y string, overallLatency string, searchInterval int64) ([]string, error) {
+	A, err := getTracesHavingTag(getFormatedTag("service.name", x)+"&limit=1000", searchInterval)
+	log.Println("getTracesHavingTag: ", len(A))
 	if err != nil {
 		return nil, err
 	}
 
-	B, err := getTracesHavingTag("service.name%3D"+y+"%20limit%3D1000", searchInterval)
+	B, err := getTracesHavingTag(getFormatedTag("service.name", y)+"&limit=1000", searchInterval)
+	log.Println("getTracesHavingTag: ", len(B))
 	if err != nil {
 		return nil, err
 	}
 
 	C, err := takeIntersection(A, B)
+	log.Println("takeIntersection: ", len(C))
 	if err != nil {
 		return nil, err
 	}
 
-	D, err := filterOnTheChildRelationshipAndTheCondition(C, x, y, condition)
+	D, err := filterOnTheChildRelationship(C, x, y)
+	log.Println("filter: ", len(D))
 	if err != nil {
 		return nil, err
 	}
 
 	return D, nil
+}
+
+func getFormatedTag(key string, value string) string {
+	return key + "%3D" + value
+}
+
+func getConcatenatedTags(tags []string) string {
+	var res string
+	for _, tag := range tags {
+		if res == "" {
+			res = tag
+		} else {
+			res = res + "%20" + tag
+		}
+	}
+	return res
 }
 
 func downloadFileIntoMemory(w io.Writer, bucket, object string, client *storage.Client) ([]byte, error) {
@@ -189,6 +264,5 @@ func main() {
 	// }
 	// log.Println(string(trace))
 
-	_, _ = getTracesWhereXCallsY("checkoutservice", "cartservice", "", "1h")
-
+	_, _ = getTracesWhereXCallsY("checkoutservice", "cartservice", "", 3600)
 }
