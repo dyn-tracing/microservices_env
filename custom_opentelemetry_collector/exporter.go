@@ -93,7 +93,7 @@ func serviceNameToBucketName(serviceName string) string {
     bucketID = strings.ReplaceAll(bucketID, "google", "")
     bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
-    return bucketID + "-snicket"
+    return bucketID + "-snicket1"
 }
 
 
@@ -167,7 +167,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
 func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
     storageClassAndLocation := &storage.BucketAttrs{
 		StorageClass: "STANDARD",
-		Location:     "US",
+		Location:     "us-central1",
         LocationType: "region",
 	}
     bkt := ex.client.Bucket(serviceNameToBucketName(serviceName))
@@ -272,7 +272,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     ex.spanBucketExists(ctx, trace_bucket)
 
     now := strconv.FormatInt(time.Now().Unix(), 10)
-    objectName := strconv.FormatUint(uint64(hash(now)), 10)
+    objectName := strconv.FormatUint(uint64(hash(now)), 10)[0:2] + "-" + now
     trace_obj := trace_bkt.Object(objectName)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
@@ -290,7 +290,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
         for i :=0; i<len(traces); i++ {
             traceIDs.logEntry("%s", traces[i])
         }
-        obj := bkt.Object(hash+"/"+objectName+"/"+now)
+        obj := bkt.Object(hash+"/"+objectName)
         w := obj.NewWriter(ctx)
         if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
             return fmt.Errorf("failed creating the object: %w", err)
@@ -330,7 +330,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
             // 3. Determine the name of the new object;  for now, this is a hash of the current time
             //    TODO: I'll make it more meaningful once I see whether this works
             now := strconv.FormatInt(time.Now().Unix(), 10)
-            objectName := strconv.FormatUint(uint64(hash(now)), 10)
+            objectName := strconv.FormatUint(uint64(hash(now)), 10)[0:2] + "-" + now
 
             // 4. Send the data under that bucket/object name to storage
             obj := bkt.Object(objectName)
