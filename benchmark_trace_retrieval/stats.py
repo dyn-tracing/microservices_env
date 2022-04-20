@@ -1,7 +1,11 @@
 import numpy as np
 import scipy.stats as st
+import sys
 
-with open("twelveEightThousandRunning.txt") as f:
+if sys.argv != 2:
+    print("usage: python3 stats.py file_name")
+
+with open(sys.argv[1]) as f:
     lines = f.read().split("\n")
     data_arrays = {}
     for line in lines:

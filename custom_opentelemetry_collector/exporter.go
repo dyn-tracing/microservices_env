@@ -281,7 +281,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
 
     minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
     maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
-    objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10) + "-" + minTimeStr + "-" + maxTimeStr
+    objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10)[0:2] + "-" + minTimeStr + "-" + maxTimeStr
     trace_obj := trace_bkt.Object(objectName)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
@@ -360,7 +360,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
             }
             minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
             maxTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
-            objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10) + "-" + minTimeStr + "-" + maxTimeStr
+            objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10)[0:2] + "-" + minTimeStr + "-" + maxTimeStr
 
             // 4. Send the data under that bucket/object name to storage
             obj := bkt.Object(objectName)

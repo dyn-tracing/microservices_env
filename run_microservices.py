@@ -254,7 +254,7 @@ def main(args):
     if args.setup:
         return setup_application_deployment(args.platform, args.multizonal, args.application, args.cluster_name)
     if args.deploy_application:
-        return deploy_application(args.application)
+        return deploy_application(args.application, args.cluster_name)
     if args.load_test:
         return load_test(args.load_test)
     if args.remove_application:
