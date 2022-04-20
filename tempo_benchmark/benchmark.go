@@ -33,36 +33,9 @@ type SearchResult struct {
 	Metrics MetricsResult
 }
 
-type Reference struct {
-	RefType string
-	TraceID string
-	SpanID  string
-}
-
-type Tag struct {
-	Key   string
-	Type  string
-	Value string
-}
-
-type Log struct {
-}
-
-type Span struct {
-	TraceID       string
-	SpanID        string
-	OperationName string
-	References    []Reference
-	StartTime     int64
-	Duration      int64
-	Tags          []Tag
-	Logs          []Log
-	ProcessID     string
-	Warnings      nil
-}
-
-const TempoQueryAddr = "http://34.134.224.33:16686/"
-const TempoAPIAddr = "http://34.134.224.33:3200/"
+const TempoIP = "http://104.197.91.3:"
+const TempoQueryAddr = TempoIP + "16686/"
+const TempoAPIAddr = TempoIP + "3200/"
 const GetTraceEndpoint = "api/traces/"
 const TempoSearchEndpoint = "api/search"
 
@@ -101,7 +74,7 @@ func getTracesHavingTag(tag string, searchIntervalInSeconds int64) ([]string, er
 	}
 	defer resp.Body.Close()
 
-	log.Println(resp.StatusCode)
+	// log.Println(resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatalln(err)
@@ -147,10 +120,48 @@ func doesTraceSatisfiesTheRelationship(traceId string, parentSerive string, chil
 		return false, err
 	}
 
+	discoveredParentIDs := []string{}
+	providedParentIDs := []string{}
+
 	var trace map[string]interface{}
 	json.Unmarshal(traceBytes, &trace)
+	traceData := trace["data"].([]interface{})
+	traceJSON := traceData[0].(map[string]interface{})
+	spanList := traceJSON["spans"].([]interface{})
 
-	return false, nil
+	for _, span := range spanList {
+		spanMap := span.(map[string]interface{})
+		spanID := spanMap["spanID"].(string)
+		tags := spanMap["tags"].([]interface{})
+		for _, tag := range tags {
+			tagMap := tag.(map[string]interface{})
+			if tagMap["key"].(string) == "serviceName" {
+				switch serviceName := tagMap["value"].(string); serviceName {
+				case parentSerive:
+					providedParentIDs = append(providedParentIDs, spanID)
+				case childService:
+					references := spanMap["references"].([]interface{})
+					for _, reference := range references {
+						referenceMap := reference.(map[string]interface{})
+						if referenceMap["refType"].(string) == "CHILD_OF" {
+							discoveredParentIDs = append(discoveredParentIDs, referenceMap["spanID"].(string))
+						}
+					}
+				default:
+					continue
+				}
+			}
+		}
+	}
+
+	commonParentIDs, err := takeIntersection(providedParentIDs, discoveredParentIDs)
+	if err != nil {
+		log.Fatal(err)
+		return false, nil
+	}
+
+	isRelationshipRespected := len(commonParentIDs) > 0
+	return isRelationshipRespected, nil
 }
 
 func filterOnTheChildRelationship(traceIds []string, parentSerive string, childService string) ([]string, error) {
@@ -172,26 +183,26 @@ func filterOnTheChildRelationship(traceIds []string, parentSerive string, childS
 }
 
 func getTracesWhereXCallsY(x string, y string, overallLatency string, searchInterval int64) ([]string, error) {
-	A, err := getTracesHavingTag(getFormatedTag("service.name", x)+"&limit=1000", searchInterval)
-	log.Println("getTracesHavingTag: ", len(A))
+	A, err := getTracesHavingTag(getFormatedTag("service.name", x)+"&limit=1000&maxDuration="+overallLatency, searchInterval)
+	// log.Println("getTracesHavingTag: ", len(A))
 	if err != nil {
 		return nil, err
 	}
 
-	B, err := getTracesHavingTag(getFormatedTag("service.name", y)+"&limit=1000", searchInterval)
-	log.Println("getTracesHavingTag: ", len(B))
+	B, err := getTracesHavingTag(getFormatedTag("service.name", y)+"&limit=1000&maxDuration="+overallLatency, searchInterval)
+	// log.Println("getTracesHavingTag: ", len(B))
 	if err != nil {
 		return nil, err
 	}
 
 	C, err := takeIntersection(A, B)
-	log.Println("takeIntersection: ", len(C))
+	// log.Println("takeIntersection: ", len(C))
 	if err != nil {
 		return nil, err
 	}
 
 	D, err := filterOnTheChildRelationship(C, x, y)
-	log.Println("filter: ", len(D))
+	// log.Println("filter: ", len(D))
 	if err != nil {
 		return nil, err
 	}
@@ -264,5 +275,10 @@ func main() {
 	// }
 	// log.Println(string(trace))
 
-	_, _ = getTracesWhereXCallsY("checkoutservice", "cartservice", "", 3600)
+	traceIDs, err := getTracesWhereXCallsY("checkoutservice", "cartservice", "2000ms", 6400)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+		log.Println(traceIDs)
+	}
 }
