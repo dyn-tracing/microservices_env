@@ -33,7 +33,7 @@ type SearchResult struct {
 	Metrics MetricsResult
 }
 
-const TempoIP = "http://104.197.91.3:"
+const TempoIP = "http://34.66.82.22:"
 const TempoQueryAddr = TempoIP + "16686/"
 const TempoAPIAddr = TempoIP + "3200/"
 const GetTraceEndpoint = "api/traces/"
@@ -65,7 +65,7 @@ func getTracesHavingTag(tag string, searchIntervalInSeconds int64) ([]string, er
 	startTime := endTime - searchIntervalInSeconds
 
 	addr := TempoAPIAddr + TempoSearchEndpoint + "?tags=" + tag + "&start=" + strconv.FormatInt(startTime, 10) + "&end=" + strconv.FormatInt(endTime, 10)
-	log.Println(addr)
+	// log.Println(addr)
 
 	resp, err := http.Get(addr)
 	if err != nil {

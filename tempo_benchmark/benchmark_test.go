@@ -30,6 +30,17 @@ const BigTraceBytes = "bigtrace-49KB"
 const SmallTraceBytes = "smalltrace-8KB"
 const TinyTraceBytes = "tinytrace-4KB"
 
+func benchmarkGraphQuery(parent string, child string, overallLatency string, duration int64, b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		ts, err := getTracesWhereXCallsY(parent, child, overallLatency, duration)
+		if err != nil {
+			b.Errorf(err.Error())
+		}
+		_ = ts
+		// log.Println(ts)
+	}
+}
+
 func benchmarkGetTrace(b *testing.B, traceId string) {
 	for i := 0; i < b.N; i++ {
 		err, _ := getTrace(traceId)
@@ -167,14 +178,18 @@ func benchmarkWriteFile(objName string, b *testing.B) {
 // 	benchmarkWriteFile(MegaBytes, b)
 // }
 
-func BenchmarkPutBigTraceBytes(b *testing.B) {
-	benchmarkWriteFile(BigTraceBytes, b)
-}
+// func BenchmarkPutBigTraceBytes(b *testing.B) {
+// 	benchmarkWriteFile(BigTraceBytes, b)
+// }
 
-func BenchmarkPutSmallTraceBytes(b *testing.B) {
-	benchmarkWriteFile(SmallTraceBytes, b)
-}
+// func BenchmarkPutSmallTraceBytes(b *testing.B) {
+// 	benchmarkWriteFile(SmallTraceBytes, b)
+// }
 
-func BenchmarkPutTinyTraceBytes(b *testing.B) {
-	benchmarkWriteFile(TinyTraceBytes, b)
+// func BenchmarkPutTinyTraceBytes(b *testing.B) {
+// 	benchmarkWriteFile(TinyTraceBytes, b)
+// }
+
+func BenchmarkGraphQuery(b *testing.B) {
+	benchmarkGraphQuery("checkoutservice", "cartservice", "2000ms", 6400, b)
 }
