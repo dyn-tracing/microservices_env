@@ -33,7 +33,7 @@ DELETE_CMD = "kubectl delete -f "
 CONFIG_MATRIX = {
     'BK': {
         'minikube_startup_command': "minikube start --cpus=2 --memory 4096 --disk-size 32g",
-        'gcloud_startup_command': "gcloud container clusters create yjdemo --enable-autoupgrade \
+        'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
                                   --num-nodes=5 ",
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {YAML_DIR}/bookinfo-services.yaml && \
@@ -45,7 +45,7 @@ CONFIG_MATRIX = {
     },
     'OB': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
-        'gcloud_startup_command':"gcloud container clusters create yjdemo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+        'gcloud_startup_command':"gcloud container clusters create demo --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  && \
@@ -57,7 +57,7 @@ CONFIG_MATRIX = {
     },
     'TT': {
         'minikube_startup_command': None,
-        'gcloud_startup_command': "gcloud container clusters create yjdemo --enable-autoupgrade \
+        'gcloud_startup_command': "gcloud container clusters create demo --enable-autoupgrade \
                                   --num-nodes=7 ",
         'deploy_cmd': "kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; " +
                       f"{ISTIO_BIN} kube-inject -f {TRAIN_TICKET_DIR}/ts-deployment-part1.yml > dpl1.yml && " +
@@ -141,7 +141,7 @@ def start_kubernetes(platform, multizonal, application):
 def stop_kubernetes(platform):
     if platform == "GCP":
         cmd = "gcloud container clusters delete "
-        cmd += "yjdemo --zone us-central1-a --quiet "
+        cmd += "demo --zone us-central1-a --quiet "
     else:
         # delete minikube
         cmd = "minikube delete"
@@ -306,3 +306,4 @@ if __name__ == '__main__':
     stderr_log.setFormatter(logging.Formatter("%(levelname)s:%(message)s"))
     logging.getLogger().addHandler(stderr_log)
     sys.exit(main(arguments))
+
