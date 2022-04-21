@@ -39,17 +39,18 @@ CONFIG_MATRIX = {
                         {APPLY_CMD} {YAML_DIR}/bookinfo-services.yaml && \
                         {APPLY_CMD} {YAML_DIR}/bookinfo-apps.yaml && \
                         {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/bookinfo-gateway.yaml && \
-                        {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-reviews.yaml ",
-        'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh"
+                        {APPLY_CMD} {ISTIO_DIR}/samples/bookinfo/networking/destination-rule-reviews.yaml && \
+                        {APPLY_CMD} {YAML_DIR}/otelcollector_bookinfo_zipkin.yaml ",
+        'undeploy_cmd': f"{ISTIO_DIR}/samples/bookinfo/platform/kube/cleanup.sh",
     },
     'OB': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
         'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  && \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests && \
-                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  ",
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/istio-manifests  && \
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes-manifests && \
+                        {APPLY_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
         'undeploy_cmd': f"{DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/istio_manifests && \
                           {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/kubernetes_manifests && \
                           {DELETE_CMD} {ONLINE_BOUTIQUE_DIR}/snicket_manifests  ",
@@ -83,9 +84,12 @@ CONFIG_MATRIX = {
 ############## PLATFORM RELATED FUNCTIONS ###############################
 
 
-def inject_istio():
+def inject_istio(application):
     cmd = f"{ISTIO_BIN} install --set profile=demo "
-    cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --skip-confirmation "
+    if application != "BK" and application != "TT":
+        cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --skip-confirmation "
+    else:
+        cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --set meshConfig.defaultConfig.tracing.zipkin.address=otelcollector:9411 --skip-confirmation "
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
@@ -240,7 +244,7 @@ def setup_application_deployment(platform, multizonal, application, cluster_name
     result = start_kubernetes(platform, multizonal, application, cluster_name)
     if result != util.EXIT_SUCCESS:
         return result
-    result = inject_istio()
+    result = inject_istio(application)
     if result != util.EXIT_SUCCESS:
         return result
     result = deploy_application(application, cluster_name)
@@ -288,7 +292,7 @@ if __name__ == '__main__':
                         "--application",
                         dest="application",
                         default="BK",
-                        choices=["BK", "OB", "LG", "TT"],
+                        choices=["BK", "OB", "TT"],
                         help="Which application to deploy."
                         "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, and TT is Train Ticket")
     parser.add_argument("-cn",
@@ -339,3 +343,4 @@ if __name__ == '__main__':
     stderr_log.setFormatter(logging.Formatter("%(levelname)s:%(message)s"))
     logging.getLogger().addHandler(stderr_log)
     sys.exit(main(arguments))
+
