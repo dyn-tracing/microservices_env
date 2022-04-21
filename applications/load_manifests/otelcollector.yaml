@@ -104,7 +104,7 @@ data:
           grpc:                                                                 
     processors:
       groupbytrace/custom:
-        wait_duration: 2s
+        wait_duration: 5s
         num_traces: 1000000
         num_workers: 15
       memory_limiter:
@@ -112,8 +112,8 @@ data:
         limit_percentage: 75
         spike_limit_percentage: 30
       batch:
-        send_batch_size: 30000
-        send_batch_max_size: 30000
+        send_batch_size: 20000
+        send_batch_max_size: 40000
         timeout: 5s
       groupbyattrs:
 
