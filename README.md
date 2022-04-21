@@ -63,3 +63,36 @@ python3 run_microservices.py -p GCP -c
 
 ### Other Notes
 The version of Online Boutique in this repository is found here:  https://github.com/julianocosta89/opentelemetry-microservices-demo.  It was edited only to allow it to run the kubernetes manifests independently through giving it absolute image names instead of relative.
+
+
+### Commands to run the train-ticket application with the collector on GCP
+
+Start the train-ticket application using the follow command in the microservices_env directory
+```
+python3 run_microservices.py -a TT -p GCP -s
+```
+Then go to yaml_crds and apply the yaml file for otelcollector using
+```
+kubectl apply -f otelcollector_train_ticket_zipkin.yaml
+```
+Wait for a few minutes and check if all the pods are running using
+```
+kubectl get pods
+```
+Make sure the otelcollector-<some hash> and the ts-ui-dashboard-<some hash> are running.
+
+Then go to Google Cloud Platform > Navigation Menu > More Products > Kubernetes Engine > Services & Ingress. In the drop-down menu, choose the name of your cluster, click ok
+
+In the filter type in "istio-ingressgateway", find the row with type called "External load balancer", expand the row ( using the ">" on the end of the row besides the name of the cluster). Click <strong>[IP]:80</strong> to visit the train-ticket web page. 
+
+Click around and perform some action (i.e. login, search, etc.) 
+
+Go back to GCP console, and check the logs for the otelcollector-<some hash> using 
+```
+kubectl logs otelcollector-<some_hash>
+```
+Clear the cluster using
+```
+python3 run_microservices.py -a TT -p GCP -c
+```
+
