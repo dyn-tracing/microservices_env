@@ -251,18 +251,10 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[string][]string)
-    minTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
-    maxTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
         traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
         for i := 0; i< len(spans); i++ {
-            if i == 0 || spans[i].span.StartTimestamp().AsTime().Before(minTime) {
-                minTime = spans[i].span.StartTimestamp().AsTime()
-            }
-            if i == 0 || spans[i].span.StartTimestamp().AsTime().After(maxTime) {
-                maxTime = spans[i].span.StartTimestamp().AsTime()
-            }
             parent := spans[i].span.ParentSpanID().HexString()
             spanID := spans[i].span.SpanID().HexString()
             resource := spans[i].resource
@@ -303,7 +295,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
             return fmt.Errorf("failed creating the object: %w", err)
         }
         if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+minTimeStr, err)
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+minTime, err)
         }
     }
     return nil
@@ -335,30 +327,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, minTime string, maxTi
                 return ret
             }
             // 3. Determine the name of the new object
-            minTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
-            maxTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
-            for j := 0; j<oneResourceSpans.ResourceSpans().Len(); j++ {
-                rsSpan := oneResourceSpans.ResourceSpans().At(j)
-                ils := rsSpan.InstrumentationLibrarySpans()
-                for k := 0; k < ils.Len(); k++ {
-                    scopeSpans := ils.At(k).Spans()
-                    for l:=0; l < scopeSpans.Len(); l++ {
-                        if j == 0 && k == 0 && l == 0 {
-                            minTime = scopeSpans.At(l).StartTimestamp().AsTime()
-                            maxTime = scopeSpans.At(l).StartTimestamp().AsTime()
-                        }
-                        if scopeSpans.At(l).StartTimestamp().AsTime().Before(minTime) {
-                            minTime = scopeSpans.At(l).StartTimestamp().AsTime()
-                        }
-                        if scopeSpans.At(l).StartTimestamp().AsTime().After(maxTime) {
-                            maxTime = scopeSpans.At(l).StartTimestamp().AsTime()
-                        }
-                    }
-                }
-            }
-            minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
-            maxTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
-            objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10)[0:2] + "-" + minTimeStr + "-" + maxTimeStr
+            objectName := strconv.FormatUint(uint64(hash(minTime)), 10)[0:2] + "-" + minTime + "-" + maxTime
 
             // 4. Send the data under that bucket/object name to storage
             obj := bkt.Object(objectName)
