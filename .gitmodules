@@ -7,3 +7,6 @@
 [submodule "trace_storage"]
 	path = trace_storage
 	url = git@github.com:dyn-tracing/trace_storage.git
+[submodule "applications/sock-shop/microservices-demo"]
+	path = applications/sock-shop/microservices-demo
+	url = https://github.com/microservices-demo/microservices-demo.git

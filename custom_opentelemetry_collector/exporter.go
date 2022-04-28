@@ -251,10 +251,18 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[string][]string)
+    minTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
+    maxTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
         traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
         for i := 0; i< len(spans); i++ {
+            if i == 0 || spans[i].span.StartTimestamp().AsTime().Before(minTime) {
+                minTime = spans[i].span.StartTimestamp().AsTime()
+            }
+            if i == 0 || spans[i].span.StartTimestamp().AsTime().After(maxTime) {
+                maxTime = spans[i].span.StartTimestamp().AsTime()
+            }
             parent := spans[i].span.ParentSpanID().HexString()
             spanID := spans[i].span.SpanID().HexString()
             resource := spans[i].resource
@@ -295,7 +303,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
             return fmt.Errorf("failed creating the object: %w", err)
         }
         if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+minTime, err)
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+minTimeStr, err)
         }
     }
     return nil

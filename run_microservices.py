@@ -21,10 +21,13 @@ TOOLS_DIR = FILE_DIR.joinpath("tools")
 ISTIO_DIR = TOOLS_DIR.joinpath("istio-1.12.1")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 YAML_DIR = FILE_DIR.joinpath("yaml_crds")
+ISTIO_MANIFEST_DIR = APP_DIR.joinpath("microservices-demo/istio-manifests")
 
 ONLINE_BOUTIQUE_DIR = APP_DIR.joinpath("microservices-demo")
 TRAIN_TICKET_DIR = APP_DIR.joinpath(
     "train-ticket/deployment/kubernetes-manifests/k8s-with-istio")
+SOCK_SHOP_DIR = APP_DIR.joinpath(
+    "sock-shop/microservices-demo/deploy/kubernetes")
 
 PROJECT_ID = "dynamic-tracing"
 APPLY_CMD = "kubectl apply -f "
@@ -79,6 +82,16 @@ CONFIG_MATRIX = {
                       f"{DELETE_CMD} {TRAIN_TICKET_DIR}/ts-deployment-part2.yml && " +
                       f"{DELETE_CMD} {TRAIN_TICKET_DIR}/ts-deployment-part3.yml "
     },
+    'SS': {
+        'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
+        'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+                                  --num-nodes=4  --machine-type e2-highmem-4 ",
+        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
+                        {APPLY_CMD} {SOCK_SHOP_DIR}/complete-demo.yaml && \
+                        {APPLY_CMD} {YAML_DIR}/otelcollector_sock_shop_zipkin.yaml && \
+                        {APPLY_CMD} {ISTIO_MANIFEST_DIR}/frontend-gateway.yaml ",
+        'undeploy_cmd': f"{DELETE_CMD} {SOCK_SHOP_DIR}/complete-demo.yaml ",
+    },
 }
 
 ############## PLATFORM RELATED FUNCTIONS ###############################
@@ -86,10 +99,10 @@ CONFIG_MATRIX = {
 
 def inject_istio(application):
     cmd = f"{ISTIO_BIN} install --set profile=demo "
-    if application != "BK" and application != "TT":
-        cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --skip-confirmation "
-    else:
+    if application == "BK" or application == "TT" or application == "SS":
         cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --set meshConfig.defaultConfig.tracing.zipkin.address=otelcollector:9411 --skip-confirmation "
+    else:
+        cmd += "--set meshConfig.enableTracing=true --set meshConfig.defaultConfig.tracing.sampling=100 --skip-confirmation "
     result = util.exec_process(cmd)
     if result != util.EXIT_SUCCESS:
         return result
@@ -292,7 +305,7 @@ if __name__ == '__main__':
                         "--application",
                         dest="application",
                         default="BK",
-                        choices=["BK", "OB", "LG", "TT"],
+                        choices=["BK", "OB", "LG", "SS", "TT"],
                         help="Which application to deploy."
                         "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, and TT is Train Ticket")
     parser.add_argument("-cn",

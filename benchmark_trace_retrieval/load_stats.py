@@ -9,7 +9,6 @@ one_retrieval_medians = [34.48, 31.59, 33.06, 33.21, 32.63, 31.99, 29.90, 30.06]
 parallel_retrieval_averages = [61.95, 58.87, 55.43, 54.19, 54.97, 54.05, 58.77, 59.78]
 parallel_retrieval_medians = [54.65, 49.13, 51.61, 49.41, 51.29, 48.77, 56.08, 56.65]
 
-
 plt.plot(tests, one_retrieval_averages, label="Average: Single object retrieval")
 plt.plot(tests, one_retrieval_medians, label="Median: Single object retrieval")
 plt.plot(tests, parallel_retrieval_averages, label="Average: Parallel object retrieval")
