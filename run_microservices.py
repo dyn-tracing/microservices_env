@@ -305,9 +305,9 @@ if __name__ == '__main__':
                         "--application",
                         dest="application",
                         default="BK",
-                        choices=["BK", "OB", "TT", "SS"],
+                        choices=["BK", "OB", "LG", "SS", "TT"],
                         help="Which application to deploy."
-                        "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, TT is Train Ticket, and SS is Sock Shop")
+                        "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, SS is sock shop, and TT is Train Ticket")
     parser.add_argument("-cn",
                         "--cluster-name",
                         dest="cluster_name",
