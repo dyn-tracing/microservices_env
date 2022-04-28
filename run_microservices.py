@@ -292,7 +292,7 @@ if __name__ == '__main__':
                         "--application",
                         dest="application",
                         default="BK",
-                        choices=["BK", "OB", "TT"],
+                        choices=["BK", "OB", "LG", "TT"],
                         help="Which application to deploy."
                         "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, and TT is Train Ticket")
     parser.add_argument("-cn",
