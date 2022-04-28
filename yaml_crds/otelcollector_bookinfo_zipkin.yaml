@@ -31,8 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/cloudstoragepermicroservicecollector:latest
-        imagePullPolicy: Always
+        image: otel/opentelemetry-collector-contrib:0.37.1
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: /var/secrets/google/key.json
@@ -68,9 +67,6 @@ spec:
   - name: "1888"
     port: 1888
     targetPort: 1888
-  - name: "8080"
-    port: 8080
-    targetPort: 8080
   - name: "8888"
     port: 8888
     targetPort: 8888
@@ -86,6 +82,9 @@ spec:
   - name: "55670"
     port: 55670
     targetPort: 55670
+  - name: "9411"
+    port: 9411
+    targetPort: 9411
 
 ---                                                                             
 apiVersion: v1                                                                  
@@ -96,55 +95,13 @@ metadata:
 # https://opentelemetry.io/docs/collector/configuration/                        
 data:                                                                           
   collector-gateway-config-template.yaml: |                                     
-    extensions:
-      zpages:
-    receivers:                                                                  
-      otlp:                                                                     
-        protocols:                                                              
-          grpc:                                                                 
-    processors:
-      groupbytrace/custom:
-        wait_duration: 5s
-        num_traces: 1000000
-        num_workers: 15
-      memory_limiter:
-        check_interval: 1s
-        limit_percentage: 75
-        spike_limit_percentage: 30
-      batch:
-        send_batch_size: 20000
-        send_batch_max_size: 40000
-        timeout: 5s
-      groupbyattrs:
-
-    exporters:                                                                  
-      logging:
-      jaeger:
-        endpoint: "jaeger:14250"
-        tls:
-          insecure: true
-        sending_queue:
-          enabled: true
-          num_consumers: 100
-          queue_size: 150000
-      googlecloudstorage/customname:                                            
-        project: dynamic-tracing                                                
-        user_agent: opentelemetry-collector-contrib {{version}}                 
-        insecure: true                                                          
-        timeout: 5s                                                             
-        retry_on_failure:                                                       
-          enabled: true                                                         
-          initial_interval: 1s                                                  
-        sending_queue:                                                          
-          enabled: true                                                         
-          num_consumers: 100                                                    
-          queue_size: 1000
-
-
-    service:                                                                    
-      extensions: [zpages]
-      pipelines:                                                                
-        traces:                                                                 
-          receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          processors: [memory_limiter, groupbytrace/custom, batch, groupbyattrs]
-          exporters: [logging, jaeger, googlecloudstorage/customname]
+    receivers:                                                             	 
+      zipkin:
+    exporters:                                                             	 
+      logging:                                                             	 
+    service:                                                               	 
+      pipelines:                                                           	 
+        traces:                                                            	 
+          receivers: [zipkin] 
+          processors: []                                                   	 
+          exporters: [logging]                                                                

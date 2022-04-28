@@ -93,7 +93,7 @@ func serviceNameToBucketName(serviceName string) string {
     bucketID = strings.ReplaceAll(bucketID, "google", "")
     bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
-    return bucketID + "-snicket"
+    return bucketID + "-snicket3"
 }
 
 
@@ -167,7 +167,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
 func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
     storageClassAndLocation := &storage.BucketAttrs{
 		StorageClass: "STANDARD",
-		Location:     "US",
+		Location:     "us-central1",
         LocationType: "region",
 	}
     bkt := ex.client.Bucket(serviceNameToBucketName(serviceName))
@@ -246,14 +246,14 @@ func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.T
 // Stores 2 things in GCS:
 // 1. Trace ID to hash and struct
 // 2. Hash to trace ID
-func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]spanWithResource) error {
+func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]spanWithResource, minTime string, maxTime string) error {
     // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[string][]string)
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
-        traceStructBuf.logEntry("Trace ID: %s:", traceID)
+        traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
         for i := 0; i< len(spans); i++ {
             parent := spans[i].span.ParentSpanID().HexString()
             spanID := spans[i].span.SpanID().HexString()
@@ -271,8 +271,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
     ex.spanBucketExists(ctx, trace_bucket)
 
-    now := strconv.FormatInt(time.Now().Unix(), 10)
-    objectName := strconv.FormatUint(uint64(hash(now)), 10)
+    objectName := strconv.FormatUint(uint64(hash(minTime)), 10)[0:2] + "-" + minTime + "-" + maxTime
     trace_obj := trace_bkt.Object(objectName)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
@@ -290,20 +289,20 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
         for i :=0; i<len(traces); i++ {
             traceIDs.logEntry("%s", traces[i])
         }
-        obj := bkt.Object(hash+"/"+objectName+"/"+now)
+        obj := bkt.Object(hash+"/"+objectName)
         w := obj.NewWriter(ctx)
         if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
             return fmt.Errorf("failed creating the object: %w", err)
         }
         if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+now, err)
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+minTime, err)
         }
     }
     return nil
 }
 
 // A helper function that stores spans according to their resource.
-func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
+func (ex *storageExporter) storeSpans(traces pdata.Traces, minTime string, maxTime string) error {
     ctx := context.Background()
     rss := traces.ResourceSpans()
     for i := 0; i< rss.Len(); i++ {
@@ -327,10 +326,31 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
             }
-            // 3. Determine the name of the new object;  for now, this is a hash of the current time
-            //    TODO: I'll make it more meaningful once I see whether this works
-            now := strconv.FormatInt(time.Now().Unix(), 10)
-            objectName := strconv.FormatUint(uint64(hash(now)), 10)
+            // 3. Determine the name of the new object
+            minTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
+            maxTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
+            for j := 0; j<oneResourceSpans.ResourceSpans().Len(); j++ {
+                rsSpan := oneResourceSpans.ResourceSpans().At(j)
+                ils := rsSpan.InstrumentationLibrarySpans()
+                for k := 0; k < ils.Len(); k++ {
+                    scopeSpans := ils.At(k).Spans()
+                    for l:=0; l < scopeSpans.Len(); l++ {
+                        if j == 0 && k == 0 && l == 0 {
+                            minTime = scopeSpans.At(l).StartTimestamp().AsTime()
+                            maxTime = scopeSpans.At(l).StartTimestamp().AsTime()
+                        }
+                        if scopeSpans.At(l).StartTimestamp().AsTime().Before(minTime) {
+                            minTime = scopeSpans.At(l).StartTimestamp().AsTime()
+                        }
+                        if scopeSpans.At(l).StartTimestamp().AsTime().After(maxTime) {
+                            maxTime = scopeSpans.At(l).StartTimestamp().AsTime()
+                        }
+                    }
+                }
+            }
+            minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
+            maxTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
+            objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10)[0:2] + "-" + minTimeStr + "-" + maxTimeStr
 
             // 4. Send the data under that bucket/object name to storage
             obj := bkt.Object(objectName)
@@ -353,16 +373,45 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces) error {
 // to process trace data and send it to GCS.
 func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
     // once you have a batch, there are two things you must do with it:
+
+    traceIDToSpans := ex.groupSpansByTraceKey(traces)
+
+    // 1. Find time span
+    minTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
+    maxTime := time.Date(2020, 2, 11, 20, 26, 12, 321, time.UTC) // dummy value, will be overwritten
+    first_iteration := true
+    for _, spans := range traceIDToSpans {
+        for i := 0; i< len(spans); i++ {
+            if first_iteration || spans[i].span.StartTimestamp().AsTime().Before(minTime) {
+                if first_iteration {
+                    ex.logger.Info("min: first iteration change")
+                } else {
+                    ex.logger.Info("min: non-first iteration change")
+                }
+                minTime = spans[i].span.StartTimestamp().AsTime()
+            }
+            if first_iteration || spans[i].span.EndTimestamp().AsTime().After(maxTime) {
+                if first_iteration {
+                    ex.logger.Info("max: first iteration change")
+                } else {
+                    ex.logger.Info("max: non-first iteration change")
+                }
+                maxTime = spans[i].span.StartTimestamp().AsTime()
+            }
+            first_iteration = false
+        }
+    }
+    minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
+    maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
     // 1. push spans to storage
-    ret := ex.storeSpans(traces)
+    ret := ex.storeSpans(traces, minTimeStr, maxTimeStr)
     if ret != nil {
         ex.logger.Error("error storing spans %s", zap.NamedError("error", ret))
         return ret
     }
     // 2. push trace structure as well as the hash of the structure to storage
     // 2a. Create a mapping from trace ID to each of the spans in the trace
-    traceIDToSpans := ex.groupSpansByTraceKey(traces)
-    ret =  ex.storeHashAndStruct(traceIDToSpans)
+    ret =  ex.storeHashAndStruct(traceIDToSpans, minTimeStr, maxTimeStr)
     if ret != nil {
         ex.logger.Error("error storing trace structure and hash %s", zap.NamedError("error", ret))
     }
