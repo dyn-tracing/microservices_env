@@ -246,7 +246,7 @@ func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.T
 // Stores 2 things in GCS:
 // 1. Trace ID to hash and struct
 // 2. Hash to trace ID
-func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]spanWithResource, minTime string, maxTime string) error {
+func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]spanWithResource, objectName string) error {
     // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
@@ -271,7 +271,6 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
     ex.spanBucketExists(ctx, trace_bucket)
 
-    objectName := strconv.FormatUint(uint64(hash(minTime)), 10)[0:2] + "-" + minTime + "-" + maxTime
     trace_obj := trace_bkt.Object(objectName)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
@@ -295,14 +294,14 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
             return fmt.Errorf("failed creating the object: %w", err)
         }
         if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName+"/"+minTime, err)
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName, err)
         }
     }
     return nil
 }
 
 // A helper function that stores spans according to their resource.
-func (ex *storageExporter) storeSpans(traces pdata.Traces, minTime string, maxTime string) error {
+func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) error {
     ctx := context.Background()
     rss := traces.ResourceSpans()
     for i := 0; i< rss.Len(); i++ {
@@ -326,10 +325,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, minTime string, maxTi
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
             }
-            // 3. Determine the name of the new object
-            objectName := strconv.FormatUint(uint64(hash(minTime)), 10)[0:2] + "-" + minTime + "-" + maxTime
-
-            // 4. Send the data under that bucket/object name to storage
+            // 3. Send the data under that bucket/object name to storage
             obj := bkt.Object(objectName)
             writer := obj.NewWriter(ctx)
             if _, err := writer.Write(buffer); err != nil {
@@ -360,19 +356,9 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     for _, spans := range traceIDToSpans {
         for i := 0; i< len(spans); i++ {
             if first_iteration || spans[i].span.StartTimestamp().AsTime().Before(minTime) {
-                if first_iteration {
-                    ex.logger.Info("min: first iteration change")
-                } else {
-                    ex.logger.Info("min: non-first iteration change")
-                }
                 minTime = spans[i].span.StartTimestamp().AsTime()
             }
             if first_iteration || spans[i].span.EndTimestamp().AsTime().After(maxTime) {
-                if first_iteration {
-                    ex.logger.Info("max: first iteration change")
-                } else {
-                    ex.logger.Info("max: non-first iteration change")
-                }
                 maxTime = spans[i].span.StartTimestamp().AsTime()
             }
             first_iteration = false
@@ -380,15 +366,16 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     }
     minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
     maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
+    objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10)[0:2] + "-" + minTimeStr + "-" + maxTimeStr
     // 1. push spans to storage
-    ret := ex.storeSpans(traces, minTimeStr, maxTimeStr)
+    ret := ex.storeSpans(traces, objectName)
     if ret != nil {
         ex.logger.Error("error storing spans %s", zap.NamedError("error", ret))
         return ret
     }
     // 2. push trace structure as well as the hash of the structure to storage
     // 2a. Create a mapping from trace ID to each of the spans in the trace
-    ret =  ex.storeHashAndStruct(traceIDToSpans, minTimeStr, maxTimeStr)
+    ret =  ex.storeHashAndStruct(traceIDToSpans, objectName)
     if ret != nil {
         ex.logger.Error("error storing trace structure and hash %s", zap.NamedError("error", ret))
     }

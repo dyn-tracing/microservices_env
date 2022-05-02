@@ -104,7 +104,7 @@ data:
           grpc:                                                                 
     processors:
       groupbytrace/custom:
-        wait_duration: 5s
+        wait_duration: 10s
         num_traces: 1000000
         num_workers: 15
       memory_limiter:
