@@ -121,11 +121,11 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]uint32, uint32) {
+func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
     // Don't need to do all the computation if you just have one span
-    spanToHash := make(map[*spanStr]uint32)
+    spanToHash := make(map[*spanStr]int)
     if len(spans) == 1 {
-        spanToHash[&spans[0]] = hash(spans[0].service)*uint32(primeNumber)
+        spanToHash[&spans[0]] = int(hash(spans[0].service))*primeNumber
         return spanToHash, spanToHash[&spans[0]]
     }
     // 1. Find root
@@ -143,8 +143,8 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[
     //    c. span to hash
     parentToChild := make(map[*spanStr][]*spanStr)
     childToParent := make(map[*spanStr]*spanStr)
-    levelToSpans := make(map[uint32][]*spanStr)
-    spanToLevel := make(map[*spanStr]uint32)
+    levelToSpans := make(map[int][]*spanStr)
+    spanToLevel := make(map[*spanStr]int)
 
     // 2a.  Fill out parent-child mappings
     // is there a better way to traverse this?
@@ -162,7 +162,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[
 
     // 2b. Fill out level-spanID mappings
 
-    var maxLevel uint32;
+    var maxLevel int;
     maxLevel = 0
 
     levelToSpans[0] = append(levelToSpans[0], &spans[root])
@@ -188,11 +188,12 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[
     }
 
     // 2c.  Use previous two mappings to fill out span ID to hash mappings
-    for i:= maxLevel; i>=0; i-- {
+    for i:= int(maxLevel); i>=0; i-- {
+        //ex.logger.Info("i", zap.Int("i", int(i)))
         // for each level, create hash
         for j:=0; j<len(levelToSpans[i]); j++ {
             span := levelToSpans[i][j]
-            spanHash := hash(span.service) + i*uint32(primeNumber)
+            spanHash := int(hash(span.service)) + i*primeNumber
             // now add all your children
             for k:=0; k<len(parentToChild[span]); k++ {
                 spanHash += spanToHash[parentToChild[span][k]]
@@ -291,7 +292,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
-	hashToTraceID := make(map[uint32][]string)
+	hashToTraceID := make(map[int][]string)
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
         traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
@@ -306,7 +307,8 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
         }
         hashmap, hash := ex.hashTrace(ctx, sp)
         for i := 0; i< len(sp); i++ {
-            traceStructBuf.logEntry("%s:%s:%s:%t", sp[i].parent, sp[i].id, sp[i].service, hashmap[&sp[i]])
+            traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
+                strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
         }
         hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
     }
@@ -324,8 +326,8 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     }
 
     // 3. Put the hash to trace ID mapping in storage
-    ex.spanBucketExists(ctx, "tracehashes")
     bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes"))
+    ex.spanBucketExists(ctx, "tracehashes")
     for hash, traces := range hashToTraceID {
         traceIDs := dataBuffer{}
         for i :=0; i<len(traces); i++ {
