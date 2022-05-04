@@ -121,14 +121,12 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) string {
-    var traceHash uint32
-    traceHash = 0
-
+func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) map[*spanStr]uint32 {
     // Don't need to do all the computation if you just have one span
+    spanToHash := make(map[*spanStr]uint32)
     if len(spans) == 1 {
-        traceHash = hash(spans[0].service)*uint32(primeNumber)
-        return strconv.FormatUint(uint64(traceHash), 10)
+        spanToHash[&spans[0]] = hash(spans[0].service)*uint32(primeNumber)
+        return spanToHash
     }
     // 1. Find root
     var root int
@@ -143,11 +141,10 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
     //    a. parent to child
     //    b. level to spans
     //    c. span to hash
-    parentToChild := make(map[string][]string)
-    childToParent := make(map[string]string)
-    levelToSpanID := make(map[uint32][]string)
-    spanIDToLevel := make(map[string]uint32)
-    spanIDToHash := make(map[string]string)
+    parentToChild := make(map[*spanStr][]*spanStr)
+    childToParent := make(map[*spanStr]*spanStr)
+    levelToSpans := make(map[uint32][]*spanStr)
+    spanToLevel := make(map[*spanStr]uint32)
 
     // 2a.  Fill out parent-child mappings
     // is there a better way to traverse this?
@@ -157,8 +154,8 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
     for i:=0; i<len(spans); i++ {
         for j:=0; j<len(spans); j++ {
             if i != j && spans[j].parent == spans[i].id {
-                parentToChild[spans[i].id] = append(parentToChild[spans[i].id], spans[j].id)
-                childToParent[spans[j].id] = spans[i].id
+                parentToChild[&spans[i]] = append(parentToChild[&spans[i]], &spans[j])
+                childToParent[&spans[j]] = &spans[i]
             }
         }
     }
@@ -168,23 +165,23 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
     var maxLevel uint32;
     maxLevel = 0
 
-    levelToSpanID[0] = append(levelToSpanID[0], spans[root].id)
-    spanIDToLevel[spans[root].id] = 0
+    levelToSpans[0] = append(levelToSpans[0], &spans[root])
+    spanToLevel[&spans[root]] = 0
 
 
-    toAssignLevel := make([]string, 0)
-    toAssignLevel = append(toAssignLevel, parentToChild[spans[root].id]...)
+    toAssignLevel := make([]*spanStr, 0)
+    toAssignLevel = append(toAssignLevel, parentToChild[&spans[root]]...)
     for len(toAssignLevel) > 0 {
         // dequeue
         spanToAssign := toAssignLevel[0]
         toAssignLevel = toAssignLevel[1:]
         // enqueue your children
         toAssignLevel = append(toAssignLevel, parentToChild[spanToAssign]...)
-        // parent is guaranteed in spanIDToLevel
-        parentLevel := spanIDToLevel[childToParent[spanToAssign]]
+        // parent is guaranteed in spanToLevel
+        parentLevel := spanToLevel[childToParent[spanToAssign]]
         // my level is one more than my parent's
-        spanIDToLevel[spanToAssign] = parentLevel+1
-        levelToSpanID[parentLevel+1] = append(levelToSpanID[parentLevel+1], spanToAssign)
+        spanToLevel[spanToAssign] = parentLevel+1
+        levelToSpans[parentLevel+1] = append(levelToSpans[parentLevel+1], spanToAssign)
         if parentLevel+1 > maxLevel {
             maxLevel = parentLevel + 1
         }
@@ -193,54 +190,18 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
     // 2c.  Use previous two mappings to fill out span ID to hash mappings
     for i:= maxLevel; i>=0; i-- {
         // for each level, create hash
-        for j:=0; j<len(levelToSpanID[i]); j++ {
-            
-        }
-
-    }
-
-
-
-
-
-    /*
-    // all direct children of root have level 1
-    for i:=0; i<len(spans); i++ {
-        if spans[i].parent == spans[root].id {
-            if parentLevel, ok := spanIDToLevel[spans[i].parent]; ok {
-                spanIDToLevel[spans[i].id] = parentLevel + 1
-                levelToSpanIDs[parentLevel + 1] = append(levelToSpanIDs[parentLevel + 1], spans[i].id)
+        for j:=0; j<len(levelToSpans[i]); j++ {
+            span := levelToSpans[i][j]
+            spanHash := hash(span.service) + i*uint32(primeNumber)
+            // now add all your children
+            for k:=0; k<len(parentToChild[span]); k++ {
+                spanHash += spanToHash[parentToChild[span][k]]
             }
+            spanToHash[span] = spanHash
         }
-    }
 
-    // Now generalize this
-
-
-    var spanCpy []spanStr
-    copy(spanCpy, spans)
-    for len(spanCpy) > 0 {
-        foundSpan = false
-        i := 0
-        for i < len(spanCpy) {
-            if val, ok := spanIDToLevel[spanCpy[i].parent]; ok {
-                spanIDToLevel[spanCpy[i].id] = val + 1
-                levelToSpanIDs[val+1] = append(levelToSpanIDs[val+1], spanCpy[i].id)
-                spanCpy[i] = spanCpy[len(spanCpy)-1]
-                spanCpy = spanCpy[:len(spanCpy)-1]
-                foundSpan = true
-            }
-            i += 1
-        }
     }
-    for i := 0; i<len(spans); i++ {
-        // if trees are unconnected, just do hash of the tree you have
-        if val, ok := spanIDToLevel[spans[i].id]; ok {
-            traceHash += hash(spans[i].service) + val*uint32(primeNumber)
-        }
-    }
-    */
-    return strconv.FormatUint(uint64(traceHash), 10)
+    return spanToHash
 }
 
 
