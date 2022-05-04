@@ -121,12 +121,12 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) map[*spanStr]uint32 {
+func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]uint32, uint32) {
     // Don't need to do all the computation if you just have one span
     spanToHash := make(map[*spanStr]uint32)
     if len(spans) == 1 {
         spanToHash[&spans[0]] = hash(spans[0].service)*uint32(primeNumber)
-        return spanToHash
+        return spanToHash, spanToHash[&spans[0]]
     }
     // 1. Find root
     var root int
@@ -201,7 +201,7 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, trace
         }
 
     }
-    return spanToHash
+    return spanToHash, spanToHash[&spans[root]]
 }
 
 
@@ -291,7 +291,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
-	hashToTraceID := make(map[string][]string)
+	hashToTraceID := make(map[uint32][]string)
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
         traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
@@ -299,13 +299,15 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
             parent := spans[i].span.ParentSpanID().HexString()
             spanID := spans[i].span.SpanID().HexString()
             resource := spans[i].resource
-            traceStructBuf.logEntry("%s:%s:%s", parent, spanID, resource)
             sp = append(sp, spanStr{
                parent: parent,
                id: spanID,
                service: resource})
         }
-        hash := ex.hashTrace(ctx, sp, traceID.HexString())
+        hashmap, hash := ex.hashTrace(ctx, sp)
+        for i := 0; i< len(sp); i++ {
+            traceStructBuf.logEntry("%s:%s:%s:%t", sp[i].parent, sp[i].id, sp[i].service, hashmap[&sp[i]])
+        }
         hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
     }
     // 2. Put the trace structure buffer in storage
@@ -329,13 +331,13 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
         for i :=0; i<len(traces); i++ {
             traceIDs.logEntry("%s", traces[i])
         }
-        obj := bkt.Object(hash+"/"+objectName)
+        obj := bkt.Object(strconv.FormatUint(uint64(hash), 10)+"/"+objectName)
         w := obj.NewWriter(ctx)
         if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
             return fmt.Errorf("failed creating the object: %w", err)
         }
         if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName, err)
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+objectName, err)
         }
     }
     return nil
