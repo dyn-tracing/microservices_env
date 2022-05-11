@@ -111,7 +111,7 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 		ex.client = client
 	}
 	ex.tracesMarshaler = otlp.NewProtobufTracesMarshaler()
-    ex.spanBucketExists(ctx, trace_bucket)
+    ex.spanBucketExists(ctx, trace_bucket, false)
 	return nil
 }
 
@@ -208,19 +208,28 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[
 }
 
 
-func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
-    labels := make(map[string]string)
-    labels["bucket_type"] = "microservice"
-    storageClassAndLocation := &storage.BucketAttrs{
-		StorageClass: "STANDARD",
-		Location:     "us-central1",
-        LocationType: "region",
-        Labels:       labels,
-	}
+func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string, isService bool) error {
+    var storageClassAndLocation storage.BucketAttrs
+    if isService {
+        labels := make(map[string]string)
+        labels["bucket_type"] = "microservice"
+        storageClassAndLocation = storage.BucketAttrs{
+            StorageClass: "STANDARD",
+            Location:     "us-central1",
+            LocationType: "region",
+            Labels:       labels,
+        }
+    } else {
+        storageClassAndLocation = storage.BucketAttrs{
+            StorageClass: "STANDARD",
+            Location:     "us-central1",
+            LocationType: "region",
+        }
+    }
     bkt := ex.client.Bucket(serviceNameToBucketName(serviceName))
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
-        if crErr := bkt.Create(ctx, ex.config.ProjectID, storageClassAndLocation); crErr != nil {
+        if crErr := bkt.Create(ctx, ex.config.ProjectID, &storageClassAndLocation); crErr != nil {
             var e *googleapi.Error
             if ok := errors.As(crErr, &e); ok {
                 if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
@@ -232,16 +241,6 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
 
             }
         } 
-        /*
-        else {
-            bucketAttrsToUpdate := storage.BucketAttrsToUpdate{}
-            bucketAttrsToUpdate.SetLabel("bucket_type", "microservice")
-            if _, err := bucket.Update(ctx, bucketAttrsToUpdate); err != nil {
-                    return fmt.Errorf("Bucket(%q).Update: %v", bucketName, err)
-            }
-
-        }
-        */
     } else if err != nil {
         return fmt.Errorf("failed getting bucket attributes: %w", err)
     }
@@ -337,7 +336,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     }
     // 2. Put the trace structure buffer in storage
     trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
-    ex.spanBucketExists(ctx, trace_bucket)
+    ex.spanBucketExists(ctx, trace_bucket, false)
 
     trace_obj := trace_bkt.Object(objectName)
     w_trace := trace_obj.NewWriter(ctx)
@@ -350,7 +349,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
 
     // 3. Put the hash to trace ID mapping in storage
     bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes"))
-    ex.spanBucketExists(ctx, "tracehashes")
+    ex.spanBucketExists(ctx, "tracehashes", false)
     for hash, traces := range hashToTraceID {
         traceIDs := dataBuffer{}
         for i :=0; i<len(traces); i++ {
@@ -388,7 +387,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
             bucketName := serviceNameToBucketName(sn.StringVal()) 
             bkt := ex.client.Bucket(bucketName)
-            ret := ex.spanBucketExists(ctx, sn.StringVal())
+            ret := ex.spanBucketExists(ctx, sn.StringVal(), true)
             if ret != nil {
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
