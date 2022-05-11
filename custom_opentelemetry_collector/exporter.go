@@ -22,9 +22,11 @@ import (
     "strings"
     "strconv"
     "time"
+    "errors"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
+    "google.golang.org/api/googleapi"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
@@ -207,20 +209,41 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[
 
 
 func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
+    labels := make(map[string]string)
+    labels["bucket_type"] = "microservice"
     storageClassAndLocation := &storage.BucketAttrs{
 		StorageClass: "STANDARD",
 		Location:     "us-central1",
         LocationType: "region",
+        Labels:       labels,
 	}
     bkt := ex.client.Bucket(serviceNameToBucketName(serviceName))
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
-        if err := bkt.Create(ctx, ex.config.ProjectID, storageClassAndLocation); err != nil {
-            return fmt.Errorf("failed creating bucket: %w", err)
+        if crErr := bkt.Create(ctx, ex.config.ProjectID, storageClassAndLocation); crErr != nil {
+            var e *googleapi.Error
+            if ok := errors.As(crErr, &e); ok {
+                if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+                    return fmt.Errorf("failed creating bucket: %w", crErr)
+                } else {
+                    ex.logger.Info("got 409")
+                    return nil;
+                }
+
+            }
+        } 
+        /*
+        else {
+            bucketAttrsToUpdate := storage.BucketAttrsToUpdate{}
+            bucketAttrsToUpdate.SetLabel("bucket_type", "microservice")
+            if _, err := bucket.Update(ctx, bucketAttrsToUpdate); err != nil {
+                    return fmt.Errorf("Bucket(%q).Update: %v", bucketName, err)
+            }
+
         }
-    }
-    if err != nil {
-        return fmt.Errorf("failed getting bucket attributes: %s %w", serviceName, err)
+        */
+    } else if err != nil {
+        return fmt.Errorf("failed getting bucket attributes: %w", err)
     }
     return err
 }
