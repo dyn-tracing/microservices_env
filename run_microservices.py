@@ -18,7 +18,7 @@ FILE_DIR = Path(__file__).parent.resolve()
 ROOT_DIR = FILE_DIR.parent
 APP_DIR = FILE_DIR.joinpath("applications")
 TOOLS_DIR = FILE_DIR.joinpath("tools")
-ISTIO_DIR = TOOLS_DIR.joinpath("istio-1.12.1")
+ISTIO_DIR = TOOLS_DIR.joinpath("istio-1.9.3")
 ISTIO_BIN = ISTIO_DIR.joinpath("bin/istioctl")
 YAML_DIR = FILE_DIR.joinpath("yaml_crds")
 ISTIO_MANIFEST_DIR = APP_DIR.joinpath("microservices-demo/istio-manifests")
@@ -216,7 +216,7 @@ def deploy_application(application, cluster_name):
         if not depl.strip():
             continue
         if "front" in depl:
-            cmd = f"kubectl autoscale {depl} --min=20 --max=30 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=1 --max=30 --cpu-percent=40"
         elif "otel" in depl or "tracegen" in depl:
             pass
         else:
