@@ -21,6 +21,7 @@ items:
     tempo.yaml: |
       server:
         http_listen_port: 3200
+      search_enabled: true
       distributor:
         receivers:                           # this configuration will listen on all ports and protocols that tempo is capable of.
           jaeger:                            # the receives all come from the OpenTelemetry collector.  more configuration information can
@@ -36,13 +37,14 @@ items:
               grpc:
           opencensus:
       ingester:
+        complete_block_timeout: 10s
         trace_idle_period: 10s               # the length of time after a trace has not received spans to consider it complete and flush it
-        max_block_bytes: 1_000_000           # cut the head block when it hits this size or ...
-        max_block_duration: 5m               #   this much time passes
+        max_block_duration: 15m               #   this much time passes
       query_frontend:
         search:
-          query_backend_after: 1m
-          query_ingesters_until: 1h
+          max_result_limit: 0
+          query_backend_after: 20s
+          query_ingesters_until: 30s
           max_duration: 0
       
       compactor:
