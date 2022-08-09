@@ -43,8 +43,8 @@ items:
       query_frontend:
         search:
           max_result_limit: 0
-          query_backend_after: 20s
-          query_ingesters_until: 30s
+          query_backend_after: 10m
+          query_ingesters_until: 15m
           max_duration: 0
       
       compactor:
@@ -131,6 +131,9 @@ items:
             name: tempo-data
           - name: google-cloud-key
             mountPath: /var/key.json
+          resources:
+            requests:
+              memory: 9Gi
         - name: tempo-query
           args:
           - --grpc-storage-plugin.configuration-file=/conf/tempo-query.yaml
@@ -152,9 +155,6 @@ items:
             name: tempo
           name: tempo-conf
         - name: google-cloud-key
-          # hostPath:
-          #   path: /var/key.json
-          #   type: File
           secret:
             secretName: pubsub-key
     updateStrategy:
