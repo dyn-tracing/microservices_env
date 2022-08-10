@@ -66,6 +66,22 @@ CONFIG_MATRIX = {
                         {APPLY_CMD} {APP_DIR}/load_manifests ",
         'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_manifests "
     },
+    'LWE': {
+        'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
+        'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+                                  --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
+        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
+                        {APPLY_CMD} {APP_DIR}/load_w_elastic ",
+        'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_w_elastic "
+    },
+    'LWT': {
+        'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
+        'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
+                                  --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
+        'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
+                        {APPLY_CMD} {APP_DIR}/load_w_tempo ",
+        'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_w_tempo "
+    },
     'TT': {
         'minikube_startup_command': None,
         'gcloud_flags': f" --enable-autoupgrade --num-nodes=5 ",
@@ -216,7 +232,7 @@ def deploy_application(application, cluster_name):
         if not depl.strip():
             continue
         if "front" in depl:
-            cmd = f"kubectl autoscale {depl} --min=20 --max=30 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=1 --max=30 --cpu-percent=40"
         elif "otel" in depl or "tracegen" in depl:
             pass
         else:
@@ -305,7 +321,7 @@ if __name__ == '__main__':
                         "--application",
                         dest="application",
                         default="BK",
-                        choices=["BK", "OB", "LG", "SS", "TT"],
+                        choices=["BK", "OB", "LG", "SS", "TT", "LWE", "LWT"],
                         help="Which application to deploy."
                         "BK is Bookinfo, OB is Online Boutique, LG is artificial load generator, SS is sock shop, and TT is Train Ticket")
     parser.add_argument("-cn",

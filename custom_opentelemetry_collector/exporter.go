@@ -22,9 +22,11 @@ import (
     "strings"
     "strconv"
     "time"
+    "errors"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
+    "google.golang.org/api/googleapi"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
@@ -109,7 +111,7 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 		ex.client = client
 	}
 	ex.tracesMarshaler = otlp.NewProtobufTracesMarshaler()
-    ex.spanBucketExists(ctx, trace_bucket)
+    ex.spanBucketExists(ctx, trace_bucket, false)
 	return nil
 }
 
@@ -121,64 +123,126 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr, traceID string) string {
-    var traceHash uint32
-    traceHash = 0
+func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
+    // Don't need to do all the computation if you just have one span
+    spanToHash := make(map[*spanStr]int)
+    if len(spans) == 1 {
+        spanToHash[&spans[0]] = int(hash(spans[0].service))*primeNumber
+        return spanToHash, spanToHash[&spans[0]]
+    }
+    // 1. Find root
     var root int
     for i := 0; i< len(spans); i++ {
         if spans[i].parent == "" {
             root = i
         }
     }
-    spanIDToLevel := make(map[string]uint32)
-    spanIDToLevel[spans[root].id] = 0
-    if len(spans) == 1 {
-        // only root span
-        // you multiply by 0 so second term is 0
-        traceHash = hash(spans[root].service)
-    } else {
-        foundSpan := true
-        var spanCpy []spanStr
-        copy(spanCpy, spans)
-        for len(spanCpy) > 0 && foundSpan {
-            foundSpan = false
-            i := 0
-            for i < len(spanCpy) {
-                if val, ok := spanIDToLevel[spanCpy[i].parent]; ok {
-                    spanIDToLevel[spanCpy[i].id] = val + 1
-                    spanCpy[i] = spanCpy[len(spanCpy)-1]
-                    spanCpy = spanCpy[:len(spanCpy)-1]
-                    foundSpan = true
-                }
-                i += 1
-            }
-        }
-        for i := 0; i<len(spans); i++ {
-            // if trees are unconnected, just do hash of the tree you have
-            if val, ok := spanIDToLevel[spans[i].id]; ok {
-                traceHash += hash(spans[i].service) + val*uint32(primeNumber)
+
+    // 2. To do hashes, you need two mappings:  parent to child, and level to spans at that level
+    // 2. Need to make three mappings:
+    //    a. parent to child
+    //    b. level to spans
+    //    c. span to hash
+    parentToChild := make(map[*spanStr][]*spanStr)
+    childToParent := make(map[*spanStr]*spanStr)
+    levelToSpans := make(map[int][]*spanStr)
+    spanToLevel := make(map[*spanStr]int)
+
+    // 2a.  Fill out parent-child mappings
+    // is there a better way to traverse this?
+    // you could probably do a stack of visited and unvisited nodes
+    // but to wade through which are visited/unvisited each time it would be O(n) anyway, so I don't think
+    // you lose any efficiency in practice through the O(n^2) solution
+    for i:=0; i<len(spans); i++ {
+        for j:=0; j<len(spans); j++ {
+            if i != j && spans[j].parent == spans[i].id {
+                parentToChild[&spans[i]] = append(parentToChild[&spans[i]], &spans[j])
+                childToParent[&spans[j]] = &spans[i]
             }
         }
     }
-    return strconv.FormatUint(uint64(traceHash), 10)
+
+    // 2b. Fill out level-spanID mappings
+
+    var maxLevel int;
+    maxLevel = 0
+
+    levelToSpans[0] = append(levelToSpans[0], &spans[root])
+    spanToLevel[&spans[root]] = 0
+
+
+    toAssignLevel := make([]*spanStr, 0)
+    toAssignLevel = append(toAssignLevel, parentToChild[&spans[root]]...)
+    for len(toAssignLevel) > 0 {
+        // dequeue
+        spanToAssign := toAssignLevel[0]
+        toAssignLevel = toAssignLevel[1:]
+        // enqueue your children
+        toAssignLevel = append(toAssignLevel, parentToChild[spanToAssign]...)
+        // parent is guaranteed in spanToLevel
+        parentLevel := spanToLevel[childToParent[spanToAssign]]
+        // my level is one more than my parent's
+        spanToLevel[spanToAssign] = parentLevel+1
+        levelToSpans[parentLevel+1] = append(levelToSpans[parentLevel+1], spanToAssign)
+        if parentLevel+1 > maxLevel {
+            maxLevel = parentLevel + 1
+        }
+    }
+
+    // 2c.  Use previous two mappings to fill out span ID to hash mappings
+    for i:= int(maxLevel); i>=0; i-- {
+        //ex.logger.Info("i", zap.Int("i", int(i)))
+        // for each level, create hash
+        for j:=0; j<len(levelToSpans[i]); j++ {
+            span := levelToSpans[i][j]
+            spanHash := int(hash(span.service)) + i*primeNumber
+            // now add all your children
+            for k:=0; k<len(parentToChild[span]); k++ {
+                spanHash += spanToHash[parentToChild[span][k]]
+            }
+            spanToHash[span] = spanHash
+        }
+
+    }
+    return spanToHash, spanToHash[&spans[root]]
 }
 
 
-func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string) error {
-    storageClassAndLocation := &storage.BucketAttrs{
-		StorageClass: "STANDARD",
-		Location:     "us-central1",
-        LocationType: "region",
-	}
+func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName string, isService bool) error {
+    var storageClassAndLocation storage.BucketAttrs
+    if isService {
+        labels := make(map[string]string)
+        labels["bucket_type"] = "microservice"
+        storageClassAndLocation = storage.BucketAttrs{
+            StorageClass: "STANDARD",
+            Location:     "us-central1",
+            LocationType: "region",
+            Labels:       labels,
+        }
+    } else {
+        storageClassAndLocation = storage.BucketAttrs{
+            StorageClass: "STANDARD",
+            Location:     "us-central1",
+            LocationType: "region",
+        }
+    }
     bkt := ex.client.Bucket(serviceNameToBucketName(serviceName))
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
-        if err := bkt.Create(ctx, ex.config.ProjectID, storageClassAndLocation); err != nil {
-            return fmt.Errorf("failed creating bucket: %w", err)
-        }
-    }
-    if err != nil {
-        return fmt.Errorf("failed getting bucket attributes: %s %w", serviceName, err)
+        if crErr := bkt.Create(ctx, ex.config.ProjectID, &storageClassAndLocation); crErr != nil {
+            var e *googleapi.Error
+            if ok := errors.As(crErr, &e); ok {
+                if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+                    return fmt.Errorf("failed creating bucket: %w", crErr)
+                } else {
+                    ex.logger.Info("got 409")
+                    return nil;
+                }
+
+            }
+        } 
+    } else if err != nil {
+        return fmt.Errorf("failed getting bucket attributes: %w", err)
     }
     return err
 }
@@ -250,7 +314,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
-	hashToTraceID := make(map[string][]string)
+	hashToTraceID := make(map[int][]string)
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
         traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
@@ -258,18 +322,21 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
             parent := spans[i].span.ParentSpanID().HexString()
             spanID := spans[i].span.SpanID().HexString()
             resource := spans[i].resource
-            traceStructBuf.logEntry("%s:%s:%s", parent, spanID, resource)
             sp = append(sp, spanStr{
                parent: parent,
                id: spanID,
                service: resource})
         }
-        hash := ex.hashTrace(ctx, sp, traceID.HexString())
+        hashmap, hash := ex.hashTrace(ctx, sp)
+        for i := 0; i< len(sp); i++ {
+            traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
+                strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
+        }
         hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
     }
     // 2. Put the trace structure buffer in storage
     trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
-    ex.spanBucketExists(ctx, trace_bucket)
+    ex.spanBucketExists(ctx, trace_bucket, false)
 
     trace_obj := trace_bkt.Object(objectName)
     w_trace := trace_obj.NewWriter(ctx)
@@ -281,20 +348,20 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     }
 
     // 3. Put the hash to trace ID mapping in storage
-    ex.spanBucketExists(ctx, "tracehashes")
     bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes"))
+    ex.spanBucketExists(ctx, "tracehashes", false)
     for hash, traces := range hashToTraceID {
         traceIDs := dataBuffer{}
         for i :=0; i<len(traces); i++ {
             traceIDs.logEntry("%s", traces[i])
         }
-        obj := bkt.Object(hash+"/"+objectName)
+        obj := bkt.Object(strconv.FormatUint(uint64(hash), 10)+"/"+objectName)
         w := obj.NewWriter(ctx)
         if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
             return fmt.Errorf("failed creating the object: %w", err)
         }
         if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", hash+"/"+objectName, err)
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+objectName, err)
         }
     }
     return nil
@@ -320,7 +387,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
             bucketName := serviceNameToBucketName(sn.StringVal()) 
             bkt := ex.client.Bucket(bucketName)
-            ret := ex.spanBucketExists(ctx, sn.StringVal())
+            ret := ex.spanBucketExists(ctx, sn.StringVal(), true)
             if ret != nil {
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
