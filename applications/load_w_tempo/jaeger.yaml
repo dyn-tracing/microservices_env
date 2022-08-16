@@ -20,6 +20,7 @@ items:
   data:
     tempo.yaml: |
       server:
+        log_level: error
         http_listen_port: 3200
       search_enabled: true
       distributor:
@@ -41,6 +42,7 @@ items:
         trace_idle_period: 10s               # the length of time after a trace has not received spans to consider it complete and flush it
         max_block_duration: 15m               #   this much time passes
       query_frontend:
+        max_outstanding_per_tenant: 3000
         search:
           max_result_limit: 0
           query_backend_after: 10m
@@ -55,6 +57,7 @@ items:
       
       overrides:
         max_search_bytes_per_trace: 50000
+        max_traces_per_user: 10000
       
       storage:
         trace:
@@ -62,12 +65,10 @@ items:
           block:
             bloom_filter_false_positive: .05 # bloom filter false positive rate.  lower values create larger filters but fewer false positives
             index_downsample_bytes: 1000     # number of bytes per index record
-            encoding: zstd                   # block encoding/compression.  options: none, gzip, lz4-64k, lz4-256k, lz4-1M, lz4, snappy, zstd, s2
+            encoding: none                   # block encoding/compression.  options: none, gzip, lz4-64k, lz4-256k, lz4-1M, lz4, snappy, zstd, s2
           wal:
             path: /tmp/tempo/wal             # where to store the the wal locally
-            encoding: zstd                 # wal encoding/compression.  options: none, gzip, lz4-64k, lz4-256k, lz4-1M, lz4, snappy, zstd, s2
-          # local:
-          #   path: /tmp/tempo/blocks
+            encoding: none                 # wal encoding/compression.  options: none, gzip, lz4-64k, lz4-256k, lz4-1M, lz4, snappy, zstd, s2
           gcs:
             bucket_name: tempo-lg
             endpoint: https://storage.googleapis.com/storage/v1/
