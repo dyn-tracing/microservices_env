@@ -63,8 +63,8 @@ CONFIG_MATRIX = {
         'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
-                        {APPLY_CMD} {APP_DIR}/load_manifests ",
-        'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_manifests "
+                        {APPLY_CMD} {APP_DIR}/load_generator_distributed_collectors ",
+        'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_generator_distributed_collectors "
     },
     'TT': {
         'minikube_startup_command': None,

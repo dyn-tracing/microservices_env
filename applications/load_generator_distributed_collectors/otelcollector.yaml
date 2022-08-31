@@ -31,7 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/snicket3:latest #jessberg/cloudstoragepermicroservicecollector:latest
+        image: otel/opentelemetry-collector-contrib #jessberg/cloudstoragepermicroservicecollector:latest
         imagePullPolicy: Always
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
@@ -127,24 +127,20 @@ data:
           enabled: true
           num_consumers: 100
           queue_size: 150000
-      googlecloudstorage/customname:                                            
-        project: dynamic-tracing                                                
-        user_agent: opentelemetry-collector-contrib {{version}}                 
-        insecure: true                                                          
-        timeout: 5s                                                             
-        retry_on_failure:                                                       
-          enabled: true                                                         
-          initial_interval: 1s                                                  
-        sending_queue:                                                          
-          enabled: true                                                         
-          num_consumers: 100                                                    
-          queue_size: 1000
+      loadbalancing:
+        protocol:
+        # the OTLP exporter configuration. "endpoint" values will be ignored
+          otlp:
+            timeout: 1s
 
-
+        # how to get the list of backends: static
+        resolver:
+          dns:
+            hostname: otelbackend # assumes 4317 as the default port
     service:                                                                    
       extensions: [zpages]
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          processors: [memory_limiter, groupbytrace/custom, batch, groupbyattrs]
-          exporters: [logging, jaeger, googlecloudstorage/customname]
+          processors: [memory_limiter, batch]
+          exporters: [logging, loadbalancing]

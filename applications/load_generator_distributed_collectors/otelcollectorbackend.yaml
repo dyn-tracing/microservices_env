@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: otelcollector
+  name: otelbackend
 spec:
   selector:
     matchLabels:
-      app: otelcollector
+      app: otelbackend
   template:
     metadata:
       labels:
-        app: otelcollector
+        app: otelbackend
     spec:
       # Init container retrieves the current cloud project id from the metadata server
       # and inserts it into the collector config template
@@ -21,14 +21,14 @@ spec:
         - '/bin/bash'
         - '-c'
         - |
-           sed "s/{{PROJECT_ID}}/$(curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)/" /template/collector-gateway-config-template.yaml >> /conf/collector-gateway-config.yaml
+           sed "s/{{PROJECT_ID}}/$(curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)/" /template/collector-backend-config-template.yaml >> /conf/collector-gateway-config.yaml
         volumeMounts:
-        - name: collector-gateway-config-template
+        - name: collector-backend-config-template
           mountPath: /template
         - name: collector-gateway-config
           mountPath: /conf
       containers:
-      - name: otelcollector
+      - name: otelbackend
         args:
         - --config=/conf/collector-gateway-config.yaml
         image: jessberg/snicket3:latest #jessberg/cloudstoragepermicroservicecollector:latest
@@ -43,12 +43,12 @@ spec:
           mountPath: /var/secrets/google
       volumes:
       # Simple ConfigMap volume with template file
-      - name: collector-gateway-config-template
+      - name: collector-backend-config-template
         configMap:
           items:
-          - key: collector-gateway-config-template.yaml
-            path: collector-gateway-config-template.yaml
-          name: collector-gateway-config-template
+          - key: collector-backend-config-template.yaml
+            path: collector-backend-config-template.yaml
+          name: collector-backend-config-template
       # Create a volume to store the expanded template (with correct cloud project ID)
       - name: collector-gateway-config
         emptyDir: {}
@@ -59,11 +59,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: otelcollector
+  name: otelbackend
 spec:
   type: ClusterIP
   selector:
-    app: otelcollector
+    app: otelbackend
   ports:
   - name: "1888"
     port: 1888
@@ -91,11 +91,11 @@ spec:
 apiVersion: v1                                                                  
 kind: ConfigMap                                                                 
 metadata:                                                                       
-  name: collector-gateway-config-template                                       
+  name: collector-backend-config-template                                       
 # Open Telemetry Collector config                                               
 # https://opentelemetry.io/docs/collector/configuration/                        
 data:                                                                           
-  collector-gateway-config-template.yaml: |                                     
+  collector-backend-config-template.yaml: |                                     
     extensions:
       zpages:
     receivers:                                                                  

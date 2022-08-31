@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracegen
+spec:
+  selector:
+    matchLabels:
+      app: tracegen
+  template:
+    metadata:
+      labels:
+        app: tracegen
+    spec:
+      containers:
+      - name: tracegen
+        image: docker.io/jessberg/tracegenerator
+        # it won't allow me to do this without a duration, so you just make the duration about a day;  no way an experiment takes longer than that
+        args: ["-otlp-insecure", "-rate", "10000", "-otlp-endpoint", "otelcollector:4317", "-duration", "10000s"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracegen
+spec:
+  type: ClusterIP 
+  selector:
+    app: tracegen
+  ports:
+  - name: "4317"
+    port: 4317
+    targetPort: 4317
