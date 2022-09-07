@@ -15,7 +15,7 @@ spec:
       - name: tracegen
         image: docker.io/jessberg/tracegenlargequeue:latest
         # it won't allow me to do this without a duration, so you just make the duration about a day;  no way an experiment takes longer than that
-        args: ["-otlp-insecure", "-rate", "500", "-otlp-endpoint", "otelcollector:4317", "-duration", "50s", "--workers", "1"]
+        args: ["-otlp-insecure", "-rate", "1000", "-otlp-endpoint", "otelcollector:4317", "-duration", "50s", "--workers", "1"]
         resources:
             requests:
                 memory: 5Gi
