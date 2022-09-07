@@ -31,8 +31,15 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/cloudstoragepermicroservicecollector:latest
+        image: jessberg/snicket4:latest
         imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 4000m
+            memory: 5Gi
+          limits:
+            cpu: 4000m
+            memory: 13Gi
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: /var/secrets/google/key.json
@@ -112,9 +119,9 @@ data:
         limit_percentage: 75
         spike_limit_percentage: 30
       batch:
-        send_batch_size: 20000
-        send_batch_max_size: 40000
-        timeout: 5s
+        send_batch_size: 40000
+        send_batch_max_size: 60000
+        timeout: 1s
       groupbyattrs:
 
     exporters:                                                                  

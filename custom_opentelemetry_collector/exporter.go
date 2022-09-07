@@ -23,6 +23,7 @@ import (
     "strconv"
     "time"
     "errors"
+    "math/rand"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
@@ -95,7 +96,7 @@ func serviceNameToBucketName(serviceName string) string {
     bucketID = strings.ReplaceAll(bucketID, "google", "")
     bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
-    return bucketID + "-snicket3"
+    return bucketID + "-snicket4"
 }
 
 
@@ -296,7 +297,7 @@ func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.T
             for j := 0; j < ilss.Len(); j++ {
                 spans := ilss.At(j).Spans()
                 spansLen := spans.Len()
-                for k := 0; k < spansLen; k++ {
+                for k := spansLen-1; k >= 0; k-- {
                     span := spans.At(k)
                     key := span.TraceID()
                     idToSpans[key] = append(idToSpans[key], spanWithResource {span: &span, resource: serviceName.StringVal()})
@@ -378,6 +379,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
 		if sn, ok := rss.At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
             oneResourceSpans := pdata.NewTraces()
             rss.At(i).CopyTo(oneResourceSpans.ResourceSpans().AppendEmpty())
+            traceID := rss.At(i).ScopeSpans().At(0).Spans().At(0).TraceID()
             buffer, err := ex.tracesMarshaler.MarshalTraces(oneResourceSpans)
             if err != nil {
                 ex.logger.Info("could not marshal traces ", zap.Error(err))
@@ -386,9 +388,16 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
 
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
             bucketName := serviceNameToBucketName(sn.StringVal()) 
+            if bucketName == "" || bucketName == "-snicket4" {
+                ex.logger.Info("could not find bucket and trace ID is ", zap.String("trace ID", traceID.HexString()))
+                ex.logger.Info("also object name is ", zap.String("objname", objectName))
+                bucketName = "null_bucket-snicket4"
+            }
             bkt := ex.client.Bucket(bucketName)
             ret := ex.spanBucketExists(ctx, sn.StringVal(), true)
             if ret != nil {
+                ex.logger.Info("sn.StringVal is ", zap.String("sn string", sn.StringVal()))
+                ex.logger.Info("bucket name is ", zap.String("bucket name ", bucketName))
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
             }
@@ -433,7 +442,11 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     }
     minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
     maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
-    objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10)[0:2] + "-" + minTimeStr + "-" + maxTimeStr
+    int_hash := strconv.FormatUint(uint64(rand.Intn(100)), 10)
+    if len(int_hash) == 1 {
+        int_hash = "0"+int_hash
+    }
+    objectName := int_hash[0:2] + "-" + minTimeStr + "-" + maxTimeStr
     // 1. push spans to storage
     ret := ex.storeSpans(traces, objectName)
     if ret != nil {
