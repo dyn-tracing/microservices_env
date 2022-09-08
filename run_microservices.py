@@ -234,7 +234,7 @@ def deploy_application(application, cluster_name):
         if "tracegen" in depl:
             cmd = f"kubectl autoscale {depl} --min=4 --max=30 --cpu-percent=40"
         elif "otelcollectorbackend" in depl:
-            cmd = f"kubectl autoscale {depl} --min=2 --max=30 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=4 --max=30 --cpu-percent=40"
             
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
@@ -274,9 +274,9 @@ def setup_application_deployment(platform, multizonal, application, cluster_name
     result = start_kubernetes(platform, multizonal, application, cluster_name)
     if result != util.EXIT_SUCCESS:
         return result
-    result = inject_istio(application)
-    if result != util.EXIT_SUCCESS:
-        return result
+    #result = inject_istio(application)
+    #if result != util.EXIT_SUCCESS:
+    #    return result
     result = deploy_application(application, cluster_name)
     if result != util.EXIT_SUCCESS:
         return result

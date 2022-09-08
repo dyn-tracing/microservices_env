@@ -105,14 +105,15 @@ data:
   collector-gateway-config-template.yaml: |                                     
     extensions:
       zpages:
+      pprof:
     receivers:                                                                  
       otlp:                                                                     
         protocols:                                                              
           grpc:                                                                 
     processors:
       batch:
-        send_batch_size: 1200
-        send_batch_max_size: 2400
+        send_batch_size: 6000
+        send_batch_max_size: 40000
         timeout: 1s
 
     exporters:                                                                  
@@ -124,7 +125,7 @@ data:
                insecure: true
              sending_queue:
                enabled: true
-               num_consumers: 2
+               num_consumers: 25
                queue_size: 150000
          resolver:
            dns:
