@@ -1,37 +1,37 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: otelcollector
+  name: otelcollectorbackend
 spec:
   selector:
     matchLabels:
-      app: otelcollector
+      app: otelcollectorbackend
   template:
     metadata:
       labels:
-        app: otelcollector
+        app: otelcollectorbackend
     spec:
       # Init container retrieves the current cloud project id from the metadata server
       # and inserts it into the collector config template
       # https://cloud.google.com/compute/docs/storing-retrieving-metadata
       initContainers:
-      - name: otel-gateway-init
+      - name: otel-gateway-init-backend
         image: gcr.io/google.com/cloudsdktool/cloud-sdk:326.0.0-alpine
         command:
         - '/bin/bash'
         - '-c'
         - |
-           sed "s/{{PROJECT_ID}}/$(curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)/" /template/collector-gateway-config-template.yaml >> /conf/collector-gateway-config.yaml
+           sed "s/{{PROJECT_ID}}/$(curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)/" /template/collector-gateway-config-template-backend.yaml >> /conf/collector-gateway-config-backend.yaml
         volumeMounts:
-        - name: collector-gateway-config-template
+        - name: collector-gateway-config-template-backend
           mountPath: /template
-        - name: collector-gateway-config
+        - name: collector-gateway-config-backend
           mountPath: /conf
       containers:
-      - name: otelcollector
+      - name: otelcollectorbackend
         args:
-        - --config=/conf/collector-gateway-config.yaml
-        image: otel/opentelemetry-collector-contrib:0.59.0
+        - --config=/conf/collector-gateway-config-backend.yaml
+        image: jessberg/snicket4:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -39,25 +39,25 @@ spec:
             memory: 5Gi
           limits:
             cpu: 4000m
-            memory: 13Gi
+            memory: 7Gi
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: /var/secrets/google/key.json
         volumeMounts:
-        - name: collector-gateway-config
+        - name: collector-gateway-config-backend
           mountPath: /conf
         - name: google-cloud-key
           mountPath: /var/secrets/google
       volumes:
       # Simple ConfigMap volume with template file
-      - name: collector-gateway-config-template
+      - name: collector-gateway-config-template-backend
         configMap:
           items:
-          - key: collector-gateway-config-template.yaml
-            path: collector-gateway-config-template.yaml
-          name: collector-gateway-config-template
+          - key: collector-gateway-config-template-backend.yaml
+            path: collector-gateway-config-template-backend.yaml
+          name: collector-gateway-config-template-backend
       # Create a volume to store the expanded template (with correct cloud project ID)
-      - name: collector-gateway-config
+      - name: collector-gateway-config-backend
         emptyDir: {}
       - name: google-cloud-key
         secret:
@@ -66,11 +66,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: otelcollector
+  name: otelcollectorbackend
 spec:
-  type: ClusterIP
+  clusterIP: None
   selector:
-    app: otelcollector
+    app: otelcollectorbackend
   ports:
   - name: "1888"
     port: 1888
@@ -98,11 +98,11 @@ spec:
 apiVersion: v1                                                                  
 kind: ConfigMap                                                                 
 metadata:                                                                       
-  name: collector-gateway-config-template                                       
+  name: collector-gateway-config-template-backend
 # Open Telemetry Collector config                                               
 # https://opentelemetry.io/docs/collector/configuration/                        
 data:                                                                           
-  collector-gateway-config-template.yaml: |                                     
+  collector-gateway-config-template-backend.yaml: |                                     
     extensions:
       zpages:
     receivers:                                                                  
@@ -110,27 +110,48 @@ data:
         protocols:                                                              
           grpc:                                                                 
     processors:
+      groupbytrace/custom:
+        wait_duration: 10s
+        num_traces: 1000000
+        num_workers: 1
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 30
       batch:
         send_batch_size: 40000
         send_batch_max_size: 60000
         timeout: 1s
+      groupbyattrs:
 
     exporters:                                                                  
       logging:
-      loadbalancing:
-         protocol:
-           otlp:
-             tls:
-               insecure: true
-         resolver:
-           dns:
-             hostname: otelcollectorbackend
-             port: 4317
+      jaeger:
+        endpoint: "jaeger:14250"
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 100
+          queue_size: 150000
+      googlecloudstorage/customname:                                            
+        project: dynamic-tracing                                                
+        user_agent: opentelemetry-collector-contrib {{version}}                 
+        insecure: true                                                          
+        timeout: 5s                                                             
+        retry_on_failure:                                                       
+          enabled: true                                                         
+          initial_interval: 1s                                                  
+        sending_queue:                                                          
+          enabled: true                                                         
+          num_consumers: 100                                                    
+          queue_size: 1000
+
 
     service:                                                                    
       extensions: [zpages]
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          processors: [batch]
-          exporters: [logging, loadbalancing]
+          processors: [groupbytrace/custom, batch, groupbyattrs]
+          exporters: [logging, googlecloudstorage/customname]
