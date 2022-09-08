@@ -153,6 +153,5 @@ data:
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          #processors: [groupbytrace/custom, batch, groupbyattrs]
-          #exporters: [logging, googlecloudstorage/customname]
-          exporters: [logging]
+          processors: [groupbytrace/custom, batch, groupbyattrs]
+          exporters: [logging, googlecloudstorage/customname]
