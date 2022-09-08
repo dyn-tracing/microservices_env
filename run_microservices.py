@@ -63,7 +63,7 @@ CONFIG_MATRIX = {
         'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
                                   --num-nodes=4  --machine-type e2-highmem-8 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
-                        {APPLY_CMD} {APP_DIR}/load_manifests/otelcollector.yaml ",
+                        {APPLY_CMD} {APP_DIR}/load_manifests/otelcollectorbackend.yaml ",
         'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_manifests "
     },
     'LWE': {
@@ -233,8 +233,9 @@ def deploy_application(application, cluster_name):
             continue
         if "tracegen" in depl:
             cmd = f"kubectl autoscale {depl} --min=4 --max=30 --cpu-percent=40"
-        elif "otel" in depl:
-            pass
+        elif "otelcollectorbackend" in depl:
+            cmd = f"kubectl autoscale {depl} --min=2 --max=30 --cpu-percent=40"
+            
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
         result = util.exec_process(cmd)
