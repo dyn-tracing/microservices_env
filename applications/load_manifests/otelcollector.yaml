@@ -35,10 +35,10 @@ spec:
         imagePullPolicy: Always
         resources:
           requests:
-            cpu: 4000m
+            cpu: 6000m
             memory: 5Gi
           limits:
-            cpu: 4000m
+            cpu: 8000m
             memory: 13Gi
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
@@ -112,7 +112,7 @@ data:
           grpc:                                                                 
     processors:
       batch:
-        send_batch_size: 6000
+        send_batch_size: 24000
         send_batch_max_size: 40000
         timeout: 1s
 
@@ -121,11 +121,12 @@ data:
       loadbalancing:
          protocol:
            otlp:
+             compression: none
              tls:
                insecure: true
              sending_queue:
                enabled: true
-               num_consumers: 25
+               num_consumers: 150
                queue_size: 150000
          resolver:
            dns:
@@ -133,7 +134,7 @@ data:
              port: 4317
 
     service:                                                                    
-      extensions: [zpages]
+      extensions: [zpages, pprof]
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
