@@ -109,9 +109,9 @@ data:
       logging:                                                                  
       googlecloudstorage:                                                       
         #project: {{PROJECT_ID}} TODO:  does this work with {{PROJECT_ID}}?
-        project: dynamic-tracing
+        project: tempocostestimate
       googlecloudstorage/customname:                                            
-        project: dynamic-tracing                                                
+        project: tempocostestimate                                                
         user_agent: opentelemetry-collector-contrib {{version}}                 
         insecure: true                                                          
         timeout: 20s                                                            

@@ -69,7 +69,7 @@ CONFIG_MATRIX = {
     'LWE': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
         'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
-                                  --num-nodes=4  --machine-type e2-highmem-4 ", # to do experiments, 7 nodes
+                                  --num-nodes=5  --machine-type c2d-highmem-16 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {APP_DIR}/load_w_elastic ",
         'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_w_elastic "
