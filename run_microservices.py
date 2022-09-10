@@ -60,8 +60,8 @@ CONFIG_MATRIX = {
     },
     'LG': {
         'minikube_startup_command': "minikube start --cpus=6 --memory 8192 --disk-size 32g",
-        'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=92 \
-                                  --num-nodes=4  --machine-type e2-highmem-8 ", # to do experiments, 7 nodes
+        'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=6 \
+                                  --num-nodes=5  --machine-type e2-highmem-8 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
                         {APPLY_CMD} {APP_DIR}/load_manifests/otelcollectorbackend.yaml ",
         'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_manifests "
@@ -234,7 +234,7 @@ def deploy_application(application, cluster_name):
         if "tracegen" in depl:
             cmd = f"kubectl autoscale {depl} --min=4 --max=30 --cpu-percent=40"
         elif "otelcollectorbackend" in depl:
-            cmd = f"kubectl autoscale {depl} --min=4 --max=30 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=2 --max=6 --cpu-percent=70"
             
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"

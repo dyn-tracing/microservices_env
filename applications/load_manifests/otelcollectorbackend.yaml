@@ -108,7 +108,7 @@ data:
     receivers:                                                                  
       otlp:                                                                     
         protocols:                                                              
-          grpc:                                                                 
+          http:
     processors:
       groupbytrace/custom:
         wait_duration: 10s

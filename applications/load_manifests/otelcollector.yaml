@@ -31,7 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: otel/opentelemetry-collector-contrib:0.59.0
+        image: jessberg/httploadbalancing:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -105,11 +105,11 @@ data:
   collector-gateway-config-template.yaml: |                                     
     extensions:
       zpages:
-      pprof:
     receivers:                                                                  
       otlp:                                                                     
         protocols:                                                              
           grpc:                                                                 
+            max_concurrent_streams: 200
     processors:
       batch:
         send_batch_size: 24000
@@ -118,7 +118,11 @@ data:
 
     exporters:                                                                  
       logging:
-      loadbalancing:
+      loadbalancerhttp:
+         resolver:
+           dns:
+             hostname: otelcollectorbackend
+             port: 4318
          protocol:
            otlp:
              compression: none
@@ -126,17 +130,13 @@ data:
                insecure: true
              sending_queue:
                enabled: true
-               num_consumers: 150
-               queue_size: 150000
-         resolver:
-           dns:
-             hostname: otelcollectorbackend
-             port: 4317
+               num_consumers: 50
+               queue_size: 150
 
     service:                                                                    
-      extensions: [zpages, pprof]
+      extensions: [zpages]
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: [batch]
-          exporters: [logging, loadbalancing]
+          exporters: [logging, loadbalancerhttp]
