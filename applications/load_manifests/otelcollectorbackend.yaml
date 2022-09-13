@@ -31,7 +31,7 @@ spec:
       - name: otelcollectorbackend
         args:
         - --config=/conf/collector-gateway-config-backend.yaml
-        image: jessberg/snicket4:latest
+        image: jessberg/snicketwithhash:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -43,6 +43,10 @@ spec:
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: /var/secrets/google/key.json
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
         volumeMounts:
         - name: collector-gateway-config-backend
           mountPath: /conf

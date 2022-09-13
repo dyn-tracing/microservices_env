@@ -24,6 +24,7 @@ import (
     "time"
     "errors"
     "math/rand"
+    "os"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
@@ -38,6 +39,7 @@ import (
 const name = "googlecloudstorage"
 const trace_bucket = "dyntraces"
 const primeNumber = 97
+var hashNumber string
 
 type storageExporter struct {
 	instanceName         string
@@ -113,6 +115,10 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 	}
 	ex.tracesMarshaler = otlp.NewProtobufTracesMarshaler()
     ex.spanBucketExists(ctx, trace_bucket, false)
+    hashNumber = strconv.FormatUint(uint64(hash(os.Getenv("MY_POD_NAME"))), 10)[0:1]
+    seed := int64(hash(os.Getenv("MY_POD_NAME")))
+    rand.Seed(seed)
+    //ex.logger.Info("seed", zap.Int("seed", seed))
 	return nil
 }
 
@@ -444,9 +450,10 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
     int_hash := strconv.FormatUint(uint64(rand.Intn(100)), 10)
     if len(int_hash) == 1 {
-        int_hash = "0"+int_hash
+        int_hash = "0" + int_hash
     }
-    objectName := int_hash[0:2] + "-" + minTimeStr + "-" + maxTimeStr
+    objectName := int_hash + hashNumber + "-" + minTimeStr + "-" + maxTimeStr
+    ex.logger.Info("object name: ", zap.String("ob:", objectName))
     // 1. push spans to storage
     ret := ex.storeSpans(traces, objectName)
     if ret != nil {
