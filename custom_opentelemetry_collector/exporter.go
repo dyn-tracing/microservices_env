@@ -448,7 +448,7 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     }
     minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
     maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
-    int_hash := strconv.FormatUint(uint64(rand.Intn(100)), 10)
+    int_hash := strconv.FormatUint(uint64(rand.Intn(10000)), 10)
     if len(int_hash) == 1 {
         int_hash = "0" + int_hash
     }
