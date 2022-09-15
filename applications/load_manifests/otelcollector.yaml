@@ -35,10 +35,10 @@ spec:
         imagePullPolicy: Always
         resources:
           requests:
-            cpu: 6000m
+            cpu: 7500m
             memory: 5Gi
           limits:
-            cpu: 8000m
+            cpu: 7500m
             memory: 13Gi
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
