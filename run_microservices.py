@@ -234,7 +234,7 @@ def deploy_application(application, cluster_name):
         if "tracegen" in depl:
             cmd = f"kubectl autoscale {depl} --min=4 --max=30 --cpu-percent=40"
         elif "otelcollectorbackend" in depl:
-            cmd = f"kubectl autoscale {depl} --min=2 --max=6 --cpu-percent=70"
+            cmd = f"kubectl autoscale {depl} --min=1 --max=1 --cpu-percent=70"
             
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
