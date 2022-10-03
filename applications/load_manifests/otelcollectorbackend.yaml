@@ -126,6 +126,8 @@ data:
 
     exporters:                                                                  
       logging:
+        sending_queue:
+          num_consumers: 1
       jaeger:
         endpoint: "jaeger:14250"
         tls:
@@ -153,5 +155,5 @@ data:
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          processors: [groupbytrace/custom, batch, groupbyattrs]
-          exporters: [logging, googlecloudstorage/customname]
+          processors: []
+          exporters: [logging]
