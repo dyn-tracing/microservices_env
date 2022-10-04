@@ -31,7 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/cloudstoragepermicroservicecollector:latest
+        image: jessberg/snicket_generalized:latest
         imagePullPolicy: Always
         env:
           - name: GOOGLE_APPLICATION_CREDENTIALS
@@ -139,6 +139,8 @@ data:
           enabled: true                                                         
           num_consumers: 100                                                    
           queue_size: 1000
+        num_of_digits_for_random_hash: 2
+        bucket_suffix: snicket2
 
 
     service:                                                                    
