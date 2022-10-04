@@ -87,7 +87,7 @@ func hash(s string) uint32 {
         return h.Sum32()
 }
 
-func serviceNameToBucketName(serviceName string) string {
+func serviceNameToBucketName(serviceName string, suffix string) string {
     // TODO: is this the best way to get it into a format for bucket names?
     // There is probably a more robust way
     bucketID := strings.ReplaceAll(serviceName, ".", "")
@@ -95,7 +95,7 @@ func serviceNameToBucketName(serviceName string) string {
     bucketID = strings.ReplaceAll(bucketID, "google", "")
     bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
-    return bucketID + "-snicket3"
+    return bucketID + suffix
 }
 
 
@@ -226,7 +226,7 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
             LocationType: "region",
         }
     }
-    bkt := ex.client.Bucket(serviceNameToBucketName(serviceName))
+    bkt := ex.client.Bucket(serviceNameToBucketName(serviceName, ex.config.BucketSuffix))
     _, err := bkt.Attrs(ctx)
     if err == storage.ErrBucketNotExist {
         if crErr := bkt.Create(ctx, ex.config.ProjectID, &storageClassAndLocation); crErr != nil {
@@ -272,7 +272,7 @@ func (ex *storageExporter) sendDummyData(ctx context.Context, traceID string) er
         traceBuf.logEntry("Number #%d", i)
     }
 
-    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
+    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket, ex.config.BucketSuffix))
     trace_obj := trace_bkt.Object(traceID)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceBuf.buf.Bytes())); err != nil {
@@ -335,7 +335,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
         hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
     }
     // 2. Put the trace structure buffer in storage
-    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket))
+    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket, ex.config.BucketSuffix))
     ex.spanBucketExists(ctx, trace_bucket, false)
 
     trace_obj := trace_bkt.Object(objectName)
@@ -348,7 +348,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
     }
 
     // 3. Put the hash to trace ID mapping in storage
-    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes"))
+    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes", ex.config.BucketSuffix))
     ex.spanBucketExists(ctx, "tracehashes", false)
     for hash, traces := range hashToTraceID {
         traceIDs := dataBuffer{}
@@ -385,7 +385,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
             }
 
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
-            bucketName := serviceNameToBucketName(sn.StringVal()) 
+            bucketName := serviceNameToBucketName(sn.StringVal(), ex.config.BucketSuffix) 
             bkt := ex.client.Bucket(bucketName)
             ret := ex.spanBucketExists(ctx, sn.StringVal(), true)
             if ret != nil {
