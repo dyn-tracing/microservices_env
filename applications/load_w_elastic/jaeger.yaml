@@ -76,6 +76,13 @@ items:
               initialDelaySeconds: 5
               periodSeconds: 5
               timeoutSeconds: 4
+            resources:
+              requests:
+                memory: 6Gi
+                cpu: "5"
+              limits:
+                memory: 10Gi
+                cpu: "9"
         volumes:
           - name: data
             emptyDir: {}
