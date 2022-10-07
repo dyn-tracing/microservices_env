@@ -57,7 +57,8 @@ items:
       
       overrides:
         max_search_bytes_per_trace: 50000
-        max_traces_per_user: 10000
+        max_traces_per_user: 0
+        max_global_traces_per_user: 0
       
       storage:
         trace:
@@ -135,6 +136,10 @@ items:
           resources:
             requests:
               memory: 9Gi
+              cpu: "4"
+            limits: 
+              memory: 10Gi
+              cpu: "5"
         - name: tempo-query
           args:
           - --grpc-storage-plugin.configuration-file=/conf/tempo-query.yaml
