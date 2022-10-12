@@ -139,4 +139,4 @@ data:
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: [batch]
-          exporters: [logging, loadbalancing]
+          exporters: [loadbalancing]

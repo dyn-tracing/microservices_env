@@ -119,8 +119,8 @@ data:
         limit_percentage: 75
         spike_limit_percentage: 30
       batch:
-        send_batch_size: 40000
-        send_batch_max_size: 60000
+        send_batch_size: 60000
+        send_batch_max_size: 80000
         timeout: 1s
       groupbyattrs:
 
@@ -153,5 +153,5 @@ data:
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          processors: [groupbytrace/custom, batch, groupbyattrs]
-          exporters: [logging, googlecloudstorage/customname]
+          processors: [batch]
+          exporters: [logging]
