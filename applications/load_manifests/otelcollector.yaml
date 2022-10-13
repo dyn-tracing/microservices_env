@@ -31,7 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: otel/opentelemetry-collector-contrib:0.59.0
+        image: jessberg/snicket4:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -115,6 +115,11 @@ data:
         send_batch_size: 24000
         send_batch_max_size: 40000
         timeout: 1s
+      groupbytrace/custom:
+        wait_duration: 10s
+        num_traces: 1000000
+        num_workers: 1
+      groupbyattrs:
 
     exporters:                                                                  
       logging:
@@ -126,17 +131,29 @@ data:
                insecure: true
              sending_queue:
                enabled: true
-               num_consumers: 150
+               num_consumers: 300
                queue_size: 150000
          resolver:
            dns:
              hostname: otelcollectorbackend
              port: 4317
+      googlecloudstorage/customname:                                            
+        project: dynamic-tracing                                                
+        user_agent: opentelemetry-collector-contrib {{version}}                 
+        insecure: true                                                          
+        timeout: 5s                                                             
+        retry_on_failure:                                                       
+          enabled: true                                                         
+          initial_interval: 1s                                                  
+        sending_queue:                                                          
+          enabled: true                                                         
+          num_consumers: 100                                                    
+          queue_size: 1000
 
     service:                                                                    
       extensions: [zpages, pprof]
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          processors: [batch]
-          exporters: [loadbalancing]
+          processors: [groupbytrace/custom, batch, groupbyattrs]
+          exporters: [logging, googlecloudstorage/customname]

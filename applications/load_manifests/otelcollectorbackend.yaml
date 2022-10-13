@@ -119,8 +119,8 @@ data:
         limit_percentage: 75
         spike_limit_percentage: 30
       batch:
-        send_batch_size: 60000
-        send_batch_max_size: 80000
+        send_batch_size: 70000
+        send_batch_max_size: 90000
         timeout: 1s
       groupbyattrs:
 
