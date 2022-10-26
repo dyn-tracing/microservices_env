@@ -31,7 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/httploadbalancing:latest
+        image: jessberg/joined:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -132,7 +132,6 @@ data:
                enabled: true
                num_consumers: 50
                queue_size: 150
-
     service:                                                                    
       extensions: [zpages]
       pipelines:                                                                

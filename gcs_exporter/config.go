@@ -40,6 +40,10 @@ type Config struct {
 	Insecure bool `mapstructure:"insecure"`
 	// Compression of the payload (only gzip or is supported, no compression is the default)
 	Compression string `mapstructure:"compression"`
+    // Suffix for buckets
+	BucketSuffix string `mapstructure:"project"`
+    // Number of digits in the random hash
+	NumOfDigitsForRandomHash string `mapstructure:"project"`
 }
 
 func (config *Config) Validate() error {

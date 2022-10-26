@@ -31,7 +31,7 @@ spec:
       - name: otelcollectorbackend
         args:
         - --config=/conf/collector-gateway-config-backend.yaml
-        image: jessberg/snicket4:latest
+        image: jessberg/joined:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -126,8 +126,6 @@ data:
 
     exporters:                                                                  
       logging:
-        sending_queue:
-          num_consumers: 1
       jaeger:
         endpoint: "jaeger:14250"
         tls:
@@ -155,5 +153,5 @@ data:
       pipelines:                                                                
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
-          processors: []
+          processors: [memory_limiter, groupbytrace/custom, batch, groupbyattrs]
           exporters: [logging]
