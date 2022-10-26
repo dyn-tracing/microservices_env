@@ -41,9 +41,9 @@ type Config struct {
 	// Compression of the payload (only gzip or is supported, no compression is the default)
 	Compression string `mapstructure:"compression"`
     // Suffix for buckets
-	BucketSuffix string `mapstructure:"project"`
+	BucketSuffix string `mapstructure:"bucket_suffix"`
     // Number of digits in the random hash
-	NumOfDigitsForRandomHash string `mapstructure:"project"`
+	NumOfDigitsForRandomHash string `mapstructure:"num_of_digits_for_random_hash"`
 }
 
 func (config *Config) Validate() error {

@@ -13,6 +13,8 @@ exporters:
     insecure: true
     timeout: 20s
     compression: gzip
+    bucket_suffix: snicket4
+    num_of_digits_for_random_hash: 2
 
 service:
   pipelines:
