@@ -23,14 +23,15 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
+    "go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.opentelemetry.io/collector/model/otlp"
 )
 
 const (
 	// The value of "type" key in configuration.
 	typeStr        = "googlecloudstorage"
 	defaultTimeout = 12 * time.Second
+    stability = component.StabilityLevelBeta
 )
 
 // NewFactory creates a factory for Google Cloud Storage exporter.
@@ -38,7 +39,7 @@ func NewFactory() component.ExporterFactory {
 	return component.NewExporterFactory(
 		typeStr,
 		createDefaultConfig,
-        component.WithTracesExporter(createTracesExporter))
+        component.WithTracesExporter(createTracesExporter, stability))
 }
 
 var exporters = map[*Config]*storageExporter{}
@@ -54,7 +55,7 @@ func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *stor
 		userAgent:        strings.ReplaceAll(pCfg.UserAgent, "{{version}}", params.BuildInfo.Version),
 		ceSource:         fmt.Sprintf("/opentelemetry/collector/%s/%s", name, params.BuildInfo.Version),
 		config:           pCfg,
-		tracesMarshaler:  otlp.NewProtobufTracesMarshaler(),
+		tracesMarshaler:  ptrace.NewProtoMarshaler(),
 	}
 	receiver.ceCompression, _ = pCfg.parseCompression()
 	exporters[pCfg] = receiver
@@ -73,7 +74,7 @@ func createDefaultConfig() config.Exporter {
 }
 
 func createTracesExporter(
-	_ context.Context,
+	ctx context.Context,
 	set component.ExporterCreateSettings,
 	cfg config.Exporter) (component.TracesExporter, error) {
 
@@ -81,8 +82,9 @@ func createTracesExporter(
 	storageExporter := ensureExporter(set, pCfg)
 
 	return exporterhelper.NewTracesExporter(
-		cfg,
+        ctx,
 		set,
+        cfg,
 		storageExporter.consumeTraces,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(pCfg.TimeoutSettings),

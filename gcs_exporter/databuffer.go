@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-// This is stolen from https://github.com/open-telemetry/opentelemetry-collector/blob/0afea3faaac826d9b122046c68dbaae1e2a64ff5/internal/otlptext/databuffer.go#L27
+// This is stolen from https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/loggingexporter/internal/otlptext/databuffer.go
 // Internal rules means you can't import it, hence the copy
 
 package googlecloudstorageexporter
@@ -22,10 +21,11 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 
-	"go.opentelemetry.io/collector/model/pdata"
+    "go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 type dataBuffer struct {
@@ -37,63 +37,72 @@ func (b *dataBuffer) logEntry(format string, a ...interface{}) {
 	b.buf.WriteString("\n")
 }
 
-func (b *dataBuffer) logAttr(label string, value string) {
-	b.logEntry("    %-15s: %s", label, value)
+func (b *dataBuffer) logAttr(attr string, value string) {
+	b.logEntry("    %-15s: %s", attr, value)
 }
 
-func (b *dataBuffer) logAttributeMap(label string, am pdata.AttributeMap) {
-	if am.Len() == 0 {
+func (b *dataBuffer) logAttributes(header string, m pcommon.Map) {
+	if m.Len() == 0 {
 		return
 	}
 
-	b.logEntry("%s:", label)
-	am.Range(func(k string, v pdata.AttributeValue) bool {
-		b.logEntry("     -> %s: %s(%s)", k, v.Type().String(), attributeValueToString(v))
+	b.logEntry("%s:", header)
+	attrPrefix := "     ->"
+
+	// Add offset to attributes if needed.
+	headerParts := strings.Split(header, "->")
+	if len(headerParts) > 1 {
+		attrPrefix = headerParts[0] + attrPrefix
+	}
+
+	m.Sort().Range(func(k string, v pcommon.Value) bool {
+		b.logEntry("%s %s: %s", attrPrefix, k, valueToString(v))
 		return true
 	})
 }
 
-func (b *dataBuffer) logInstrumentationLibrary(il pdata.InstrumentationLibrary) {
+func (b *dataBuffer) logInstrumentationScope(il pcommon.InstrumentationScope) {
 	b.logEntry(
-		"InstrumentationLibrary %s %s",
+		"InstrumentationScope %s %s",
 		il.Name(),
 		il.Version())
+	b.logAttributes("InstrumentationScope attributes", il.Attributes())
 }
 
-func (b *dataBuffer) logMetricDescriptor(md pdata.Metric) {
+func (b *dataBuffer) logMetricDescriptor(md pmetric.Metric) {
 	b.logEntry("Descriptor:")
 	b.logEntry("     -> Name: %s", md.Name())
 	b.logEntry("     -> Description: %s", md.Description())
 	b.logEntry("     -> Unit: %s", md.Unit())
-	b.logEntry("     -> DataType: %s", md.DataType().String())
+	b.logEntry("     -> DataType: %s", md.Type().String())
 }
 
-func (b *dataBuffer) logMetricDataPoints(m pdata.Metric) {
-	switch m.DataType() {
-	case pdata.MetricDataTypeNone:
+func (b *dataBuffer) logMetricDataPoints(m pmetric.Metric) {
+	switch m.Type() {
+	case pmetric.MetricTypeEmpty:
 		return
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		b.logNumberDataPoints(m.Gauge().DataPoints())
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricTypeSum:
 		data := m.Sum()
 		b.logEntry("     -> IsMonotonic: %t", data.IsMonotonic())
 		b.logEntry("     -> AggregationTemporality: %s", data.AggregationTemporality().String())
 		b.logNumberDataPoints(data.DataPoints())
-	case pdata.MetricDataTypeHistogram:
+	case pmetric.MetricTypeHistogram:
 		data := m.Histogram()
 		b.logEntry("     -> AggregationTemporality: %s", data.AggregationTemporality().String())
-		b.logDoubleHistogramDataPoints(data.DataPoints())
-	case pdata.MetricDataTypeExponentialHistogram:
+		b.logHistogramDataPoints(data.DataPoints())
+	case pmetric.MetricTypeExponentialHistogram:
 		data := m.ExponentialHistogram()
 		b.logEntry("     -> AggregationTemporality: %s", data.AggregationTemporality().String())
 		b.logExponentialHistogramDataPoints(data.DataPoints())
-	case pdata.MetricDataTypeSummary:
+	case pmetric.MetricTypeSummary:
 		data := m.Summary()
 		b.logDoubleSummaryDataPoints(data.DataPoints())
 	}
 }
 
-func (b *dataBuffer) logNumberDataPoints(ps pdata.NumberDataPointSlice) {
+func (b *dataBuffer) logNumberDataPoints(ps pmetric.NumberDataPointSlice) {
 	for i := 0; i < ps.Len(); i++ {
 		p := ps.At(i)
 		b.logEntry("NumberDataPoints #%d", i)
@@ -102,15 +111,15 @@ func (b *dataBuffer) logNumberDataPoints(ps pdata.NumberDataPointSlice) {
 		b.logEntry("StartTimestamp: %s", p.StartTimestamp())
 		b.logEntry("Timestamp: %s", p.Timestamp())
 		switch p.ValueType() {
-		case pdata.MetricValueTypeInt:
-			b.logEntry("Value: %d", p.IntVal())
-		case pdata.MetricValueTypeDouble:
-			b.logEntry("Value: %f", p.DoubleVal())
+		case pmetric.NumberDataPointValueTypeInt:
+			b.logEntry("Value: %d", p.IntValue())
+		case pmetric.NumberDataPointValueTypeDouble:
+			b.logEntry("Value: %f", p.DoubleValue())
 		}
 	}
 }
 
-func (b *dataBuffer) logDoubleHistogramDataPoints(ps pdata.HistogramDataPointSlice) {
+func (b *dataBuffer) logHistogramDataPoints(ps pmetric.HistogramDataPointSlice) {
 	for i := 0; i < ps.Len(); i++ {
 		p := ps.At(i)
 		b.logEntry("HistogramDataPoints #%d", i)
@@ -119,25 +128,30 @@ func (b *dataBuffer) logDoubleHistogramDataPoints(ps pdata.HistogramDataPointSli
 		b.logEntry("StartTimestamp: %s", p.StartTimestamp())
 		b.logEntry("Timestamp: %s", p.Timestamp())
 		b.logEntry("Count: %d", p.Count())
-		b.logEntry("Sum: %f", p.Sum())
 
-		bounds := p.ExplicitBounds()
-		if len(bounds) != 0 {
-			for i, bound := range bounds {
-				b.logEntry("ExplicitBounds #%d: %f", i, bound)
-			}
+		if p.HasSum() {
+			b.logEntry("Sum: %f", p.Sum())
 		}
 
-		buckets := p.BucketCounts()
-		if len(buckets) != 0 {
-			for j, bucket := range buckets {
-				b.logEntry("Buckets #%d, Count: %d", j, bucket)
-			}
+		if p.HasMin() {
+			b.logEntry("Min: %f", p.Min())
+		}
+
+		if p.HasMax() {
+			b.logEntry("Max: %f", p.Max())
+		}
+
+		for i := 0; i < p.ExplicitBounds().Len(); i++ {
+			b.logEntry("ExplicitBounds #%d: %f", i, p.ExplicitBounds().At(i))
+		}
+
+		for j := 0; j < p.BucketCounts().Len(); j++ {
+			b.logEntry("Buckets #%d, Count: %d", j, p.BucketCounts().At(j))
 		}
 	}
 }
 
-func (b *dataBuffer) logExponentialHistogramDataPoints(ps pdata.ExponentialHistogramDataPointSlice) {
+func (b *dataBuffer) logExponentialHistogramDataPoints(ps pmetric.ExponentialHistogramDataPointSlice) {
 	for i := 0; i < ps.Len(); i++ {
 		p := ps.At(i)
 		b.logEntry("ExponentialHistogramDataPoints #%d", i)
@@ -146,7 +160,18 @@ func (b *dataBuffer) logExponentialHistogramDataPoints(ps pdata.ExponentialHisto
 		b.logEntry("StartTimestamp: %s", p.StartTimestamp())
 		b.logEntry("Timestamp: %s", p.Timestamp())
 		b.logEntry("Count: %d", p.Count())
-		b.logEntry("Sum: %f", p.Sum())
+
+		if p.HasSum() {
+			b.logEntry("Sum: %f", p.Sum())
+		}
+
+		if p.HasMin() {
+			b.logEntry("Min: %f", p.Min())
+		}
+
+		if p.HasMax() {
+			b.logEntry("Max: %f", p.Max())
+		}
 
 		scale := int(p.Scale())
 		factor := math.Ldexp(math.Ln2, -scale)
@@ -162,30 +187,28 @@ func (b *dataBuffer) logExponentialHistogramDataPoints(ps pdata.ExponentialHisto
 		negB := p.Negative().BucketCounts()
 		posB := p.Positive().BucketCounts()
 
-		for i := 0; i < len(negB); i++ {
-			pos := len(negB) - i - 1
+		for i := 0; i < negB.Len(); i++ {
+			pos := negB.Len() - i - 1
 			index := p.Negative().Offset() + int32(pos)
-			count := p.Negative().BucketCounts()[pos]
 			lower := math.Exp(float64(index) * factor)
 			upper := math.Exp(float64(index+1) * factor)
-			b.logEntry("Bucket (%f, %f], Count: %d", -upper, -lower, count)
+			b.logEntry("Bucket (%f, %f], Count: %d", -upper, -lower, negB.At(pos))
 		}
 
 		if p.ZeroCount() != 0 {
 			b.logEntry("Bucket [0, 0], Count: %d", p.ZeroCount())
 		}
 
-		for pos := 0; pos < len(posB); pos++ {
+		for pos := 0; pos < posB.Len(); pos++ {
 			index := p.Positive().Offset() + int32(pos)
-			count := p.Positive().BucketCounts()[pos]
 			lower := math.Exp(float64(index) * factor)
 			upper := math.Exp(float64(index+1) * factor)
-			b.logEntry("Bucket [%f, %f), Count: %d", lower, upper, count)
+			b.logEntry("Bucket [%f, %f), Count: %d", lower, upper, posB.At(pos))
 		}
 	}
 }
 
-func (b *dataBuffer) logDoubleSummaryDataPoints(ps pdata.SummaryDataPointSlice) {
+func (b *dataBuffer) logDoubleSummaryDataPoints(ps pmetric.SummaryDataPointSlice) {
 	for i := 0; i < ps.Len(); i++ {
 		p := ps.At(i)
 		b.logEntry("SummaryDataPoints #%d", i)
@@ -204,11 +227,11 @@ func (b *dataBuffer) logDoubleSummaryDataPoints(ps pdata.SummaryDataPointSlice) 
 	}
 }
 
-func (b *dataBuffer) logDataPointAttributes(labels pdata.AttributeMap) {
-	b.logAttributeMap("Data point attributes", labels)
+func (b *dataBuffer) logDataPointAttributes(attributes pcommon.Map) {
+	b.logAttributes("Data point attributes", attributes)
 }
 
-func (b *dataBuffer) logEvents(description string, se pdata.SpanEventSlice) {
+func (b *dataBuffer) logEvents(description string, se ptrace.SpanEventSlice) {
 	if se.Len() == 0 {
 		return
 	}
@@ -224,15 +247,11 @@ func (b *dataBuffer) logEvents(description string, se pdata.SpanEventSlice) {
 		if e.Attributes().Len() == 0 {
 			continue
 		}
-		b.logEntry("     -> Attributes:")
-		e.Attributes().Range(func(k string, v pdata.AttributeValue) bool {
-			b.logEntry("         -> %s: %s(%s)", k, v.Type().String(), attributeValueToString(v))
-			return true
-		})
+		b.logAttributes("     -> Attributes:", e.Attributes())
 	}
 }
 
-func (b *dataBuffer) logLinks(description string, sl pdata.SpanLinkSlice) {
+func (b *dataBuffer) logLinks(description string, sl ptrace.SpanLinkSlice) {
 	if sl.Len() == 0 {
 		return
 	}
@@ -244,61 +263,15 @@ func (b *dataBuffer) logLinks(description string, sl pdata.SpanLinkSlice) {
 		b.logEntry("SpanLink #%d", i)
 		b.logEntry("     -> Trace ID: %s", l.TraceID().HexString())
 		b.logEntry("     -> ID: %s", l.SpanID().HexString())
-		b.logEntry("     -> TraceState: %s", l.TraceState())
+		b.logEntry("     -> TraceState: %s", l.TraceState().AsRaw())
 		b.logEntry("     -> DroppedAttributesCount: %d", l.DroppedAttributesCount())
 		if l.Attributes().Len() == 0 {
 			continue
 		}
-		b.logEntry("     -> Attributes:")
-		l.Attributes().Range(func(k string, v pdata.AttributeValue) bool {
-			b.logEntry("         -> %s: %s(%s)", k, v.Type().String(), attributeValueToString(v))
-			return true
-		})
+		b.logAttributes("     -> Attributes:", l.Attributes())
 	}
 }
 
-func attributeValueToString(av pdata.AttributeValue) string {
-	switch av.Type() {
-	case pdata.AttributeValueTypeString:
-		return av.StringVal()
-	case pdata.AttributeValueTypeBool:
-		return strconv.FormatBool(av.BoolVal())
-	case pdata.AttributeValueTypeDouble:
-		return strconv.FormatFloat(av.DoubleVal(), 'f', -1, 64)
-	case pdata.AttributeValueTypeInt:
-		return strconv.FormatInt(av.IntVal(), 10)
-	case pdata.AttributeValueTypeArray:
-		return attributeValueSliceToString(av.SliceVal())
-	case pdata.AttributeValueTypeMap:
-		return attributeMapToString(av.MapVal())
-	default:
-		return fmt.Sprintf("<Unknown OpenTelemetry attribute value type %q>", av.Type())
-	}
-}
-
-func attributeValueSliceToString(av pdata.AttributeValueSlice) string {
-	var b strings.Builder
-	b.WriteByte('[')
-	for i := 0; i < av.Len(); i++ {
-		if i < av.Len()-1 {
-			fmt.Fprintf(&b, "%s, ", attributeValueToString(av.At(i)))
-		} else {
-			b.WriteString(attributeValueToString(av.At(i)))
-		}
-	}
-
-	b.WriteByte(']')
-	return b.String()
-}
-
-func attributeMapToString(av pdata.AttributeMap) string {
-	var b strings.Builder
-	b.WriteString("{\n")
-
-	av.Sort().Range(func(k string, v pdata.AttributeValue) bool {
-		fmt.Fprintf(&b, "     -> %s: %s(%s)\n", k, v.Type(), v.AsString())
-		return true
-	})
-	b.WriteByte('}')
-	return b.String()
+func valueToString(v pcommon.Value) string {
+	return fmt.Sprintf("%s(%s)", v.Type().String(), v.AsString())
 }
