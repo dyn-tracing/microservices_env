@@ -23,6 +23,7 @@ import (
     "strconv"
     "time"
     "errors"
+    "math/rand"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
@@ -296,7 +297,7 @@ func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.T
             for j := 0; j < ilss.Len(); j++ {
                 spans := ilss.At(j).Spans()
                 spansLen := spans.Len()
-                for k := 0; k < spansLen; k++ {
+                for k := spansLen-1; k >= 0; k-- {
                     span := spans.At(k)
                     key := span.TraceID()
                     idToSpans[key] = append(idToSpans[key], spanWithResource {span: &span, resource: serviceName.StringVal()})
@@ -385,10 +386,12 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
             }
 
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
-            bucketName := serviceNameToBucketName(sn.StringVal(), ex.config.BucketSuffix) 
+            bucketName := serviceNameToBucketName(sn.StringVal(), ex.config.BucketSuffix)
             bkt := ex.client.Bucket(bucketName)
             ret := ex.spanBucketExists(ctx, sn.StringVal(), true)
             if ret != nil {
+                ex.logger.Info("sn.StringVal is ", zap.String("sn string", sn.StringVal()))
+                ex.logger.Info("bucket name is ", zap.String("bucket name ", bucketName))
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
             }
@@ -433,7 +436,11 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Trace
     }
     minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
     maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
-    objectName := strconv.FormatUint(uint64(hash(minTimeStr)), 10)[0:2] + "-" + minTimeStr + "-" + maxTimeStr
+    int_hash := strconv.FormatUint(uint64(rand.Intn(100)), 10)
+    if len(int_hash) == 1 {
+        int_hash = "0"+int_hash
+    }
+    objectName := int_hash[0:2] + "-" + minTimeStr + "-" + maxTimeStr
     // 1. push spans to storage
     ret := ex.storeSpans(traces, objectName)
     if ret != nil {

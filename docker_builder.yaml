@@ -7,6 +7,8 @@ extensions:
 exporters:
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter v0.0.0"
     path: "../gcs_exporter"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancerhttp v0.0.0"
+    path: "../loadbalancerhttp"
   - import: go.opentelemetry.io/collector/exporter/loggingexporter
     gomod: go.opentelemetry.io/collector v0.48.0
   - import: go.opentelemetry.io/collector/exporter/otlpexporter
