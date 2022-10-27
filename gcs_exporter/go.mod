@@ -1,6 +1,6 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudstorageexporter
 
-go 1.17
+go 1.18
 
 require (
 	cloud.google.com/go/storage v1.27.0
