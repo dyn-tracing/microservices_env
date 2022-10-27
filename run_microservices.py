@@ -63,7 +63,7 @@ CONFIG_MATRIX = {
         'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=6 \
                                   --num-nodes=5  --machine-type e2-highmem-8 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
-                        {APPLY_CMD} {APP_DIR}/load_manifests/otelcollectorbackend.yaml ",
+                        {APPLY_CMD} {APP_DIR}/load_generator/",
         'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/load_manifests "
     },
     'LWE': {
@@ -215,14 +215,26 @@ def get_gateway_info(platform):
 
 ################### APPLICATION SPECIFIC FUNCTIONS ###########################
 
-def deploy_application(application, cluster_name):
+def deploy_application(application, cluster_name, tracegen_autoscaling):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
-    cmd = CONFIG_MATRIX[application]['deploy_cmd']
-    result = util.exec_process(cmd)
-    application_wait()
+    # if we are load generator, deploy the collector in two parts:
+    if application == 'LG':
+        cmd = CONFIG_MATRIX[application]['deploy_cmd']
+        result = util.exec_process(cmd + "otelcollectorbackend.yaml")
+        application_wait()
+        result = util.exec_process(cmd + "otelcollector.yaml")
+        application_wait()
+        result = util.exec_process(cmd + "tracegen.yaml")
+        application_wait()
+    else:    
+        cmd = CONFIG_MATRIX[application]['deploy_cmd']
+        result = util.exec_process(cmd)
+        application_wait()
+
+    # Now do autoscaling
     cmd = "kubectl get deployments -o name "
     deployments = util.get_output_from_proc(cmd).decode("utf-8").strip()
     deployments = deployments.split("\n")
@@ -232,7 +244,7 @@ def deploy_application(application, cluster_name):
         if not depl.strip():
             continue
         if "tracegen" in depl:
-            cmd = f"kubectl autoscale {depl} --min=4 --max=30 --cpu-percent=40"
+            cmd = f"kubectl autoscale {depl} --min=" + tracegen_autoscaling + " --max=" + tracegen_autoscaling + " --cpu-percent=40"
         elif "otelcollectorbackend" in depl:
             cmd = f"kubectl autoscale {depl} --min=1 --max=1 --cpu-percent=70"
             
@@ -270,31 +282,50 @@ def remove_application(application):
     return result
 
 
-def setup_application_deployment(platform, multizonal, application, cluster_name):
+def setup_application_deployment(platform, multizonal, application, cluster_name, tracegen_autoscaling):
     result = start_kubernetes(platform, multizonal, application, cluster_name)
     if result != util.EXIT_SUCCESS:
         return result
     #result = inject_istio(application)
     #if result != util.EXIT_SUCCESS:
     #    return result
-    result = deploy_application(application, cluster_name)
+    result = deploy_application(application, cluster_name, tracegen_autoscaling)
     if result != util.EXIT_SUCCESS:
         return result
     return result
 
+def count_traces():
+    cmd = "kubectl get pods -o name"
+    tracegens = util.get_output_from_proc(cmd).decode("utf-8").strip()
+    tracegens = tracegens.split("\n")
+    total_traces = 0
+    for pod in tracegens:
+        if "tracegen" not in pod:
+            continue
+        cmd = "kubectl logs " + pod + " --tail 1"
+        log_line = util.get_output_from_proc(cmd).decode("utf-8").strip()
+        if "traces generated" not in log_line:
+            print("Traces either haven't finished being generated, or something has gone wrong. see pod ", pod)
+        beginning_of_num = log_line.rfind(':')
+        num_traces = int(log_line[beginning_of_num+1:len(log_line)-1])
+        total_traces = num_traces + total_traces
+    print("total traces were: ", total_traces)
+    return 0
 
 def main(args):
     # single commands to execute
     if args.setup:
-        return setup_application_deployment(args.platform, args.multizonal, args.application, args.cluster_name)
+        return setup_application_deployment(args.platform, args.multizonal, args.application, args.cluster_name, args.tracegen_autoscaling)
     if args.deploy_application:
-        return deploy_application(args.application, args.cluster_name)
+        return deploy_application(args.application, args.cluster_name, args.tracegen_autoscaling)
     if args.load_test:
         return load_test(args.load_test)
     if args.remove_application:
         return remove_application(args.application)
     if args.clean:
         return stop_kubernetes(args.platform, args.cluster_name)
+    if args.count_traces:
+        return count_traces()
 
 
 if __name__ == '__main__':
@@ -352,6 +383,10 @@ if __name__ == '__main__':
                         "--load-test",
                         dest="load_test",
                         help="do load testing with this many thousand traces per second")
+    parser.add_argument("-ta",
+                        "--tracegen-autoscaling",
+                        dest="tracegen_autoscaling",
+                        help="autoscale the trace generator to this amount")
     parser.add_argument("-db",
                         "--deploy-application",
                         dest="deploy_application",
@@ -362,6 +397,11 @@ if __name__ == '__main__':
                         dest="remove_application",
                         action="store_true",
                         help="remove the app. ")
+    parser.add_argument("-ct",
+                        "--count-traces",
+                        dest="count_traces",
+                        action="store_true",
+                        help="count number of generated traces. ")
     # Parse options and process argv
     arguments = parser.parse_args()
     # configure logging
