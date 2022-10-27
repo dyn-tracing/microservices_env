@@ -25,7 +25,8 @@ minikube config set driver hyperkit
 # Try to install docker
 brew install  --cask docker docker-machine
 # Install go to build the telemetry collector
-brew install golang@1.18
+brew install go@1.18
+go version
 elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 # Docker
 sudo apt install -y docker.io
