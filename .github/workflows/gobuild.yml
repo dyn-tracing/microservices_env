@@ -39,4 +39,5 @@ jobs:
     - name: Test with go build
       run: |
         cd loadbalancerhttp
+        go version
         go build
