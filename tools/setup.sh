@@ -45,7 +45,7 @@ rm minikube_latest_amd64.deb
 minikube config set driver docker
 # Install go to build the telemetry collector
 wget https://dl.google.com/go/go1.18.0.linux-amd64.tar.gz
-sudo tar -xvf go1.17.4.linux-amd64.tar.gz
+sudo tar -xvf go1.18.0.linux-amd64.tar.gz
 sudo mv go /usr/local
 echo 'export GOROOT=/usr/local/go ' >>~/.bash_profile
 # TODO(Fabian): Make this user-defined? I hate Go...
