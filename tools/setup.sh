@@ -25,7 +25,7 @@ minikube config set driver hyperkit
 # Try to install docker
 brew install  --cask docker docker-machine
 # Install go to build the telemetry collector
-brew install golang@1.17.4
+brew install go@1.18
 elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 # Docker
 sudo apt install -y docker.io
@@ -44,14 +44,19 @@ rm minikube_latest_amd64.deb
 # Need to use docker because we are in a VM
 minikube config set driver docker
 # Install go to build the telemetry collector
-wget https://dl.google.com/go/go1.17.4.linux-amd64.tar.gz
-sudo tar -xvf go1.17.4.linux-amd64.tar.gz
+wget -q https://go.dev/dl/go1.18.linux-amd64.tar.gz
+#wget https://dl.google.com/go/go1.18.0.linux-amd64.tar.gz
+sudo tar -xvf go1.18.linux-amd64.tar.gz
 sudo mv go /usr/local
 echo 'export GOROOT=/usr/local/go ' >>~/.bash_profile
 # TODO(Fabian): Make this user-defined? I hate Go...
 echo 'export GOPATH=$HOME/GoProjects' >>~/.bash_profile
 echo 'export PATH=$GOPATH/bin:$GOROOT/bin:$PATH' >>~/.bash_profile
+
+echo $PATH | grep "/usr/local/go/bin"
 fi
+
+go version
 
 # Configure minikube
 # Bookinfo requires more memory

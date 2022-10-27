@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/component/componenthelper"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
@@ -234,8 +233,7 @@ func TestLogBatchWithTwoTraces(t *testing.T) {
 	require.NoError(t, err)
 
 	// pre-load an exporter here, so that we don't use the actual OTLP exporter
-	sink := new(consumertest.LogsSink)
-	lb.exporters["endpoint-1"] = newMockLogsExporter(sink.ConsumeLogs)
+    lb.addMissingExporters(context.Background(), []string{"endpoint-1"})
 	p.loadBalancer = lb
 
 	err = p.Start(context.Background(), componenttest.NewNopHost())
@@ -304,8 +302,7 @@ func TestLogsWithoutTraceID(t *testing.T) {
 	require.NoError(t, err)
 
 	// pre-load an exporter here, so that we don't use the actual OTLP exporter
-	sink := new(consumertest.LogsSink)
-	lb.exporters["endpoint-1"] = newMockLogsExporter(sink.ConsumeLogs)
+    lb.addMissingExporters(context.Background(), []string{"endpoint-1"})
 	p.loadBalancer = lb
 
 	err = p.Start(context.Background(), componenttest.NewNopHost())
@@ -493,10 +490,15 @@ func (e *mockLogsExporter) ConsumeLogs(ctx context.Context, ld pdata.Logs) error
 	return e.ConsumeLogsFn(ctx, ld)
 }
 
-func newMockLogsExporter(ConsumeLogsFn func(ctx context.Context, ld pdata.Logs) error) component.LogsExporter {
+type mockComponent struct {
+	component.StartFunc
+	component.ShutdownFunc
+}
+
+func newMockLogsExporter(consumelogsfn func(ctx context.Context, ld plog.Logs) error) component.LogsExporter {
 	return &mockLogsExporter{
-		Component:     componenthelper.New(),
-		ConsumeLogsFn: ConsumeLogsFn,
+		Component:     mockComponent{},
+		consumelogsfn: consumelogsfn,
 	}
 }
 

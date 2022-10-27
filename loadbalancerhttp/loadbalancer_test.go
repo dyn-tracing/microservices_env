@@ -22,11 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/component/componenthelper"
-	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
-	"go.opentelemetry.io/collector/model/pdata"
 )
 
 func TestNewLoadBalancerNoResolver(t *testing.T) {
@@ -349,5 +346,5 @@ func TestFailedExporterInRing(t *testing.T) {
 }
 
 func newNopMockExporter() component.Exporter {
-	return componenthelper.New()
+	return mockComponent{}
 }

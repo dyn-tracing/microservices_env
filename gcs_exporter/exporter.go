@@ -26,11 +26,11 @@ import (
     "math/rand"
 
     storage "cloud.google.com/go/storage"
-    conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
+    conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
     "google.golang.org/api/googleapi"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/model/otlp"
-	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
     "hash/fnv"
 )
@@ -48,7 +48,7 @@ type storageExporter struct {
 	ceSource             string
 	ceCompression        Compression
 	config               *Config
-	tracesMarshaler      pdata.TracesMarshaler
+	tracesMarshaler      ptrace.Marshaler
 }
 
 func (*storageExporter) Name() string {
@@ -77,7 +77,7 @@ type spanStr struct {
 }
 
 type spanWithResource struct {
-    span *pdata.Span
+    span *ptrace.Span
     resource string
 }
 
@@ -111,7 +111,6 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 
 		ex.client = client
 	}
-	ex.tracesMarshaler = otlp.NewProtobufTracesMarshaler()
     ex.spanBucketExists(ctx, trace_bucket, false)
 	return nil
 }
@@ -288,19 +287,19 @@ func (ex *storageExporter) sendDummyData(ctx context.Context, traceID string) er
 
 // took parts of this code from tail sampling processor here:
 // https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/6cb401f1f25d2affcf5a10e737ad1c7e10912206/processor/tailsamplingprocessor/processor.go#L300
-func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.TraceID][]spanWithResource {
-	idToSpans := make(map[pdata.TraceID][]spanWithResource)
+func (ex *storageExporter) groupSpansByTraceKey(traces ptrace.Traces) map[pcommon.TraceID][]spanWithResource {
+	idToSpans := make(map[pcommon.TraceID][]spanWithResource)
     for i := 0; i<traces.ResourceSpans().Len(); i++ {
         rs := traces.ResourceSpans().At(i)
         if serviceName, ok := rs.Resource().Attributes().Get(conventions.AttributeServiceName); ok {
-            ilss := rs.InstrumentationLibrarySpans()
+            ilss := rs.ScopeSpans()
             for j := 0; j < ilss.Len(); j++ {
                 spans := ilss.At(j).Spans()
                 spansLen := spans.Len()
                 for k := spansLen-1; k >= 0; k-- {
                     span := spans.At(k)
                     key := span.TraceID()
-                    idToSpans[key] = append(idToSpans[key], spanWithResource {span: &span, resource: serviceName.StringVal()})
+                    idToSpans[key] = append(idToSpans[key], spanWithResource {span: &span, resource: serviceName.AsString()})
                 }
             }
         }
@@ -311,7 +310,7 @@ func (ex *storageExporter) groupSpansByTraceKey(traces pdata.Traces) map[pdata.T
 // Stores 2 things in GCS:
 // 1. Trace ID to hash and struct
 // 2. Hash to trace ID
-func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][]spanWithResource, objectName string) error {
+func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pcommon.TraceID][]spanWithResource, objectName string) error {
     // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
@@ -369,7 +368,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pdata.TraceID][
 }
 
 // A helper function that stores spans according to their resource.
-func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) error {
+func (ex *storageExporter) storeSpans(traces ptrace.Traces, objectName string) error {
     ctx := context.Background()
     rss := traces.ResourceSpans()
     for i := 0; i< rss.Len(); i++ {
@@ -377,7 +376,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
         // they have been grouped by resource already.
         // 1. Marshal the spans from the same resource into a buffer
 		if sn, ok := rss.At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
-            oneResourceSpans := pdata.NewTraces()
+            oneResourceSpans := ptrace.NewTraces()
             rss.At(i).CopyTo(oneResourceSpans.ResourceSpans().AppendEmpty())
             buffer, err := ex.tracesMarshaler.MarshalTraces(oneResourceSpans)
             if err != nil {
@@ -386,11 +385,11 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
             }
 
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
-            bucketName := serviceNameToBucketName(sn.StringVal(), ex.config.BucketSuffix)
+            bucketName := serviceNameToBucketName(sn.AsString(), ex.config.BucketSuffix)
             bkt := ex.client.Bucket(bucketName)
-            ret := ex.spanBucketExists(ctx, sn.StringVal(), true)
+            ret := ex.spanBucketExists(ctx, sn.AsString(), true)
             if ret != nil {
-                ex.logger.Info("sn.StringVal is ", zap.String("sn string", sn.StringVal()))
+                ex.logger.Info("sn.AsString is ", zap.String("sn string", sn.AsString()))
                 ex.logger.Info("bucket name is ", zap.String("bucket name ", bucketName))
                 ex.logger.Info("span bucket exists error ", zap.Error(ret))
                 return ret
@@ -414,7 +413,7 @@ func (ex *storageExporter) storeSpans(traces pdata.Traces, objectName string) er
 
 // This is the main function of the exporter.  It is called by consumers
 // to process trace data and send it to GCS.
-func (ex *storageExporter) consumeTraces(ctx context.Context, traces pdata.Traces) error {
+func (ex *storageExporter) consumeTraces(ctx context.Context, traces ptrace.Traces) error {
     // once you have a batch, there are two things you must do with it:
 
     traceIDToSpans := ex.groupSpansByTraceKey(traces)
