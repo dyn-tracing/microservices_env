@@ -54,6 +54,8 @@ echo 'export GOPATH=$HOME/GoProjects' >>~/.bash_profile
 echo 'export PATH=$GOPATH/bin:$GOROOT/bin:$PATH' >>~/.bash_profile
 fi
 
+go version
+
 # Configure minikube
 # Bookinfo requires more memory
 minikube config set memory 4096
