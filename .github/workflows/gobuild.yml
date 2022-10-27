@@ -6,7 +6,7 @@ on:
     branches: [ main ]
 
 jobs:
-  go-build-opentelemetry:
+  go-build-gcs-exporter:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -22,4 +22,21 @@ jobs:
     - name: Test with go build
       run: |
         cd gcs_exporter
+        go build
+  go-build-load-balancer:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+          os: [macos-latest, ubuntu-20.04]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        ./tools/setup.sh
+    - name: Test with go build
+      run: |
+        cd loadbalancerhttp
         go build

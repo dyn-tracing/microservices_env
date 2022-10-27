@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/storage v1.27.0
 	github.com/stretchr/testify v1.8.1
 	go.opentelemetry.io/collector v0.63.0
+	go.opentelemetry.io/collector/pdata v0.63.0
 	go.opentelemetry.io/collector/semconv v0.63.0
 	go.uber.org/zap v1.23.0
 	google.golang.org/api v0.101.0
@@ -60,7 +61,6 @@ require (
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.opentelemetry.io/collector/pdata v0.63.0 // indirect
 	go.opentelemetry.io/contrib/propagators/b3 v1.11.1 // indirect
 	go.opentelemetry.io/otel v1.11.1 // indirect
 	go.opentelemetry.io/otel/exporters/prometheus v0.33.0 // indirect
