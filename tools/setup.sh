@@ -26,7 +26,6 @@ minikube config set driver hyperkit
 brew install  --cask docker docker-machine
 # Install go to build the telemetry collector
 brew install go@1.18
-go version
 elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 # Docker
 sudo apt install -y docker.io
@@ -47,8 +46,8 @@ minikube config set driver docker
 # Install go to build the telemetry collector
 wget -q https://go.dev/dl/go1.18.linux-amd64.tar.gz
 #wget https://dl.google.com/go/go1.18.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.18.linux-amd64.tar.gz
-#sudo mv go /usr/local
+sudo tar -xvf go1.18.linux-amd64.tar.gz
+sudo mv go /usr/local
 echo 'export GOROOT=/usr/local/go ' >>~/.bash_profile
 # TODO(Fabian): Make this user-defined? I hate Go...
 echo 'export GOPATH=$HOME/GoProjects' >>~/.bash_profile
