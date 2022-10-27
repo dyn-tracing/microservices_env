@@ -31,7 +31,7 @@ spec:
       - name: otelcollectorbackend
         args:
         - --config=/conf/collector-gateway-config-backend.yaml
-        image: jessberg/joined:latest
+        image: jessberg/updated_versions:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -146,6 +146,8 @@ data:
           enabled: true                                                         
           num_consumers: 100                                                    
           queue_size: 1000
+        num_of_digits_for_random_hash: 2
+        bucket_suffix: -snicket4
 
 
     service:                                                                    
@@ -154,4 +156,4 @@ data:
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: [memory_limiter, groupbytrace/custom, batch, groupbyattrs]
-          exporters: [logging]
+          exporters: [logging, googlecloudstorage/customname]
