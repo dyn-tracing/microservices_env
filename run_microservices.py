@@ -215,39 +215,54 @@ def get_gateway_info(platform):
 
 ################### APPLICATION SPECIFIC FUNCTIONS ###########################
 
-def deploy_application(application, cluster_name, tracegen_autoscaling):
+def get_deployments():
+    cmd = "kubectl get deployments -o name "
+    deployments = util.get_output_from_proc(cmd).decode("utf-8").strip()
+    deployments = deployments.split("\n")
+    return deployments
+
+def autoscale(identifier, num_to_autoscale_by, deployments):
+    print("deployments")
+    for depl in deployments:
+        if identifier in depl:
+            cmd = f"kubectl autoscale {depl} --min=" + num_to_autoscale_by + " --max=" + num_to_autoscale_by + " --cpu-percent=70"
+            result = util.exec_process(cmd)
+            if result != util.EXIT_SUCCESS:
+                return result
+    # autoscaler kicks in every 15 seconds
+    sleep(15)
+    application_wait()
+
+def deploy_application(application, cluster_name, tracegen_autoscaling, backend_autoscaling):
     if check_kubernetes_status() != util.EXIT_SUCCESS:
         log.error("Kubernetes is not set up."
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
     # if we are load generator, deploy the collector in two parts:
     if application == 'LG':
+        print("tracegen autoscaling is ", tracegen_autoscaling, " and backend autoscaling is ", backend_autoscaling)
         cmd = CONFIG_MATRIX[application]['deploy_cmd']
         result = util.exec_process(cmd + "otelcollectorbackend.yaml")
         application_wait()
+        autoscale("otelcollectorbackend", backend_autoscaling, get_deployments())
         result = util.exec_process(cmd + "otelcollector.yaml")
         application_wait()
         result = util.exec_process(cmd + "tracegen.yaml")
         application_wait()
+        autoscale("tracegen", tracegen_autoscaling, get_deployments())
     else:    
         cmd = CONFIG_MATRIX[application]['deploy_cmd']
         result = util.exec_process(cmd)
         application_wait()
 
     # Now do autoscaling
-    cmd = "kubectl get deployments -o name "
-    deployments = util.get_output_from_proc(cmd).decode("utf-8").strip()
-    deployments = deployments.split("\n")
     log.info("Starting horizontal autoscaling")
-    for depl in deployments:
+    for depl in get_deployments():
         # Sometimes, the list contains whitespace.
         if not depl.strip():
             continue
-        if "tracegen" in depl:
-            cmd = f"kubectl autoscale {depl} --min=" + tracegen_autoscaling + " --max=" + tracegen_autoscaling + " --cpu-percent=40"
-        elif "otelcollectorbackend" in depl:
-            cmd = f"kubectl autoscale {depl} --min=1 --max=1 --cpu-percent=70"
-            
+        if "otelcollectorbackend" in depl or "tracegen" in depl:
+            continue # already autoscaled above
         else:
             cmd = f"kubectl autoscale {depl} --min=1 --max=10 --cpu-percent=40"
         result = util.exec_process(cmd)
@@ -282,14 +297,11 @@ def remove_application(application):
     return result
 
 
-def setup_application_deployment(platform, multizonal, application, cluster_name, tracegen_autoscaling):
+def setup_application_deployment(platform, multizonal, application, cluster_name, tracegen_autoscaling, backend_autoscaling):
     result = start_kubernetes(platform, multizonal, application, cluster_name)
     if result != util.EXIT_SUCCESS:
         return result
-    #result = inject_istio(application)
-    #if result != util.EXIT_SUCCESS:
-    #    return result
-    result = deploy_application(application, cluster_name, tracegen_autoscaling)
+    result = deploy_application(application, cluster_name, tracegen_autoscaling, backend_autoscaling)
     if result != util.EXIT_SUCCESS:
         return result
     return result
@@ -315,11 +327,9 @@ def count_traces():
 def main(args):
     # single commands to execute
     if args.setup:
-        return setup_application_deployment(args.platform, args.multizonal, args.application, args.cluster_name, args.tracegen_autoscaling)
+        return setup_application_deployment(args.platform, args.multizonal, args.application, args.cluster_name, args.tracegen_autoscaling, args.backend_autoscaling)
     if args.deploy_application:
-        return deploy_application(args.application, args.cluster_name, args.tracegen_autoscaling)
-    if args.load_test:
-        return load_test(args.load_test)
+        return deploy_application(args.application, args.cluster_name, args.tracegen_autoscaling, args.backend_autoscaling)
     if args.remove_application:
         return remove_application(args.application)
     if args.clean:
@@ -379,14 +389,16 @@ if __name__ == '__main__':
                         dest="clean",
                         action="store_true",
                         help="Clean up an existing deployment. ")
-    parser.add_argument("-lt",
-                        "--load-test",
-                        dest="load_test",
-                        help="do load testing with this many thousand traces per second")
     parser.add_argument("-ta",
                         "--tracegen-autoscaling",
                         dest="tracegen_autoscaling",
-                        help="autoscale the trace generator to this amount")
+                        default="1",
+                        help="do load testing with this many thousand traces per second")
+    parser.add_argument("-ba",
+                        "--backend-autoscaling",
+                        dest="backend_autoscaling",
+                        default="1",
+                        help="create this many backends")
     parser.add_argument("-db",
                         "--deploy-application",
                         dest="deploy_application",
