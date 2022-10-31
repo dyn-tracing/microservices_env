@@ -230,7 +230,7 @@ def autoscale(identifier, num_to_autoscale_by, deployments):
             if result != util.EXIT_SUCCESS:
                 return result
     # autoscaler kicks in every 15 seconds
-    sleep(15)
+    time.sleep(15)
     application_wait()
 
 def deploy_application(application, cluster_name, tracegen_autoscaling, backend_autoscaling):
