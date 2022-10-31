@@ -240,7 +240,6 @@ def deploy_application(application, cluster_name, tracegen_autoscaling, backend_
         sys.exit(util.EXIT_FAILURE)
     # if we are load generator, deploy the collector in two parts:
     if application == 'LG':
-        print("tracegen autoscaling is ", tracegen_autoscaling, " and backend autoscaling is ", backend_autoscaling)
         cmd = CONFIG_MATRIX[application]['deploy_cmd']
         result = util.exec_process(cmd + "otelcollectorbackend.yaml")
         application_wait()
