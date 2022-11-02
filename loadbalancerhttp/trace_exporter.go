@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
     "go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/multierr"
+    "go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
 )
@@ -45,10 +46,12 @@ type traceExporterImp struct {
 
 	stopped    bool
 	shutdownWg sync.WaitGroup
+
+    logger *zap.Logger
 }
 
 // Create new traces exporter
-func newTracesExporter(params component.ExporterCreateSettings, cfg config.Exporter) (*traceExporterImp, error) {
+func newTracesExporter(params component.ExporterCreateSettings, cfg config.Exporter, logger *zap.Logger) (*traceExporterImp, error) {
 	exporterFactory := otlphttpexporter.NewFactory()
 
 	lb, err := newLoadBalancer(params, cfg, func(ctx context.Context, endpoint string) (component.Exporter, error) {
@@ -61,6 +64,7 @@ func newTracesExporter(params component.ExporterCreateSettings, cfg config.Expor
 
 	return &traceExporterImp{
 		loadBalancer: lb,
+        logger: logger,
 	}, nil
 }
 
@@ -115,6 +119,8 @@ func (e *traceExporterImp) consumeTrace(ctx context.Context, td ptrace.Traces) e
 		}
 
 		start := time.Now()
+        total_spans := td.SpanCount()
+        e.logger.Info("total spans: ", zap.Int("spans in one batch", total_spans))
 		err = te.ConsumeTraces(ctx, td)
 		duration := time.Since(start)
 

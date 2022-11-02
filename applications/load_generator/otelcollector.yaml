@@ -112,8 +112,8 @@ data:
             max_concurrent_streams: 200
     processors:
       batch:
-        send_batch_size: 24000
-        send_batch_max_size: 40000
+        send_batch_size: 120000
+        send_batch_max_size: 140000
         timeout: 1s
 
     exporters:                                                                  
@@ -130,7 +130,7 @@ data:
                insecure: true
              sending_queue:
                enabled: true
-               num_consumers: 50
+               num_consumers: 100
                queue_size: 150
     service:                                                                    
       extensions: [zpages]

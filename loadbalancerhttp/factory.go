@@ -21,6 +21,8 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
+
+    "go.uber.org/zap"
 )
 
 const (
@@ -55,7 +57,7 @@ func createDefaultConfig() config.Exporter {
 }
 
 func createTracesExporter(_ context.Context, params component.ExporterCreateSettings, cfg config.Exporter) (component.TracesExporter, error) {
-	return newTracesExporter(params, cfg)
+	return newTracesExporter(params, cfg, params.Logger.With(zap.String("loadbalancer", "traces")))
 }
 
 func createLogsExporter(_ context.Context, params component.ExporterCreateSettings, cfg config.Exporter) (component.LogsExporter, error) {
