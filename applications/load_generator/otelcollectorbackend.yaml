@@ -31,7 +31,7 @@ spec:
       - name: otelcollectorbackend
         args:
         - --config=/conf/collector-gateway-config-backend.yaml
-        image: jessberg/updated_versions:latest
+        image: jessberg/print:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -146,7 +146,7 @@ data:
           enabled: true                                                         
           num_consumers: 100                                                    
           queue_size: 1000
-        num_of_digits_for_random_hash: 2
+        num_of_digits_for_random_hash: 7
         bucket_suffix: -snicket-throughput
 
 

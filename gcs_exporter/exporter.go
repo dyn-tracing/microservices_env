@@ -23,7 +23,9 @@ import (
     "strconv"
     "time"
     "errors"
-    "math/rand"
+    "crypto/rand"
+    "os"
+    "math/big"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
@@ -38,6 +40,7 @@ import (
 const name = "googlecloudstorage"
 const trace_bucket = "dyntraces"
 const primeNumber = 97
+var hashNumber string
 
 type storageExporter struct {
 	instanceName         string
@@ -112,6 +115,10 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 		ex.client = client
 	}
     ex.spanBucketExists(ctx, trace_bucket, false)
+    hashNumber = strconv.FormatUint(uint64(hash(os.Getenv("MY_POD_NAME"))), 10)[0:1]
+    //seed := int64(hash(os.Getenv("MY_POD_NAME")))
+    //ex.logger.Info("seed", zap.String("seed", string(seed)))
+    //rand.Seed(seed)
 	return nil
 }
 
@@ -435,11 +442,20 @@ func (ex *storageExporter) consumeTraces(ctx context.Context, traces ptrace.Trac
     }
     minTimeStr := strconv.FormatUint(uint64(minTime.Unix()), 10)
     maxTimeStr := strconv.FormatUint(uint64(maxTime.Unix()), 10)
-    int_hash := strconv.FormatUint(uint64(rand.Intn(100)), 10)
+    random, _ := rand.Int(rand.Reader, big.NewInt(100000000))
+    int_hash := strconv.FormatUint(uint64(random.Int64()), 10)
     if len(int_hash) == 1 {
         int_hash = "0"+int_hash
     }
-    objectName := int_hash[0:2] + "-" + minTimeStr + "-" + maxTimeStr
+    numDigits, err := strconv.Atoi(ex.config.NumOfDigitsForRandomHash)
+    if err != nil {
+        ex.logger.Error("error converting %s", zap.NamedError("error", err))
+        return err
+    }
+    if len(int_hash) > numDigits {
+        int_hash = int_hash[0:numDigits-1]
+    }
+    objectName := int_hash + hashNumber + "-" + minTimeStr + "-" + maxTimeStr
     // 1. push spans to storage
     ret := ex.storeSpans(traces, objectName)
     if ret != nil {
