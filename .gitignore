@@ -1,3 +1,4 @@
 .DS_Store
+.vscode
 run_microservices.log
 service_account.json

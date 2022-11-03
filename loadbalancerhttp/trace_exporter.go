@@ -91,10 +91,69 @@ func (e *traceExporterImp) Shutdown(context.Context) error {
 
 func (e *traceExporterImp) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
 	var errs error
-	batches := batchpersignal.SplitTraces(td)
-	for _, batch := range batches {
-		errs = multierr.Append(errs, e.consumeTrace(ctx, batch))
+    // SplitTraces splits into batches of individual traces.
+    // Now we need to consolidate traces which have the same endpoint into
+    // the same message to be sent.
+
+    /*
+    batches := batchpersignal.SplitTraces(td)
+    for _, batch := range batches {
+        errs = multierr.Append(errs, e.consumeTrace(ctx, batch))
+
+    }
+    */
+
+	traces := batchpersignal.SplitTraces(td)
+    endpointToTraceData := make(map[string]ptrace.Traces)
+
+	for trace := range traces {
+	    routingIDs, err := routingIdentifiersFromTraces(traces[trace], e.routingKey)
+        errs = multierr.Append(errs, err)
+        for rid := range routingIDs {
+		    endpoint := e.loadBalancer.Endpoint([]byte(rid))
+            if _, ok := endpointToTraceData[endpoint]; ok {
+                // append
+                for i := 0; i < traces[trace].ResourceSpans().Len(); i++ {
+                    traces[trace].ResourceSpans().At(i).CopyTo(endpointToTraceData[endpoint].ResourceSpans().AppendEmpty())
+                }
+            } else {
+                newTrace := ptrace.NewTraces()
+                for i := 0; i < traces[trace].ResourceSpans().Len(); i++ {
+                    traces[trace].ResourceSpans().At(i).CopyTo(newTrace.ResourceSpans().AppendEmpty())
+                }
+                endpointToTraceData[endpoint] = newTrace
+            }
+        }
 	}
+
+    for endpoint, traces := range(endpointToTraceData) {
+		exp, err := e.loadBalancer.Exporter(endpoint)
+		if err != nil {
+			return err
+		}
+
+		te, ok := exp.(component.TracesExporter)
+		if !ok {
+			expectType := (*component.TracesExporter)(nil)
+			return fmt.Errorf("expected %T but got %T", expectType, exp)
+		}
+
+		start := time.Now()
+		err = te.ConsumeTraces(ctx, traces)
+		duration := time.Since(start)
+
+        if err == nil {
+			_ = stats.RecordWithTags(
+				ctx,
+				[]tag.Mutator{tag.Upsert(endpointTagKey, endpoint), successTrueMutator},
+				mBackendLatency.M(duration.Milliseconds()))
+		} else {
+			_ = stats.RecordWithTags(
+				ctx,
+				[]tag.Mutator{tag.Upsert(endpointTagKey, endpoint), successFalseMutator},
+				mBackendLatency.M(duration.Milliseconds()))
+		}
+    }
 
 	return errs
 }
@@ -119,8 +178,6 @@ func (e *traceExporterImp) consumeTrace(ctx context.Context, td ptrace.Traces) e
 		}
 
 		start := time.Now()
-        total_spans := td.SpanCount()
-        e.logger.Info("total spans: ", zap.Int("spans in one batch", total_spans))
 		err = te.ConsumeTraces(ctx, td)
 		duration := time.Since(start)
 

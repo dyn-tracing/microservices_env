@@ -31,7 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/updated_versions:latest
+        image: jessberg/print:latest
         imagePullPolicy: Always
         resources:
           requests:
@@ -119,6 +119,7 @@ data:
     exporters:                                                                  
       logging:
       loadbalancerhttp:
+         routing_key: traceID
          resolver:
            dns:
              hostname: otelcollectorbackend
