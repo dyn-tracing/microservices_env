@@ -112,7 +112,7 @@ data:
             max_concurrent_streams: 200
     processors:
       batch:
-        send_batch_size: 150000
+        send_batch_size: 200000
         send_batch_max_size: 300000
         timeout: 1s
 
