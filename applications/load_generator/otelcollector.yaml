@@ -31,11 +31,11 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/updated_versions:latest
+        image: jessberg/print:latest
         imagePullPolicy: Always
         resources:
           requests:
-            cpu: 6000m
+            cpu: 7000m
             memory: 5Gi
           limits:
             cpu: 8000m
@@ -112,13 +112,14 @@ data:
             max_concurrent_streams: 200
     processors:
       batch:
-        send_batch_size: 24000
-        send_batch_max_size: 40000
+        send_batch_size: 200000
+        send_batch_max_size: 300000
         timeout: 1s
 
     exporters:                                                                  
       logging:
       loadbalancerhttp:
+         routing_key: traceID
          resolver:
            dns:
              hostname: otelcollectorbackend
@@ -130,7 +131,7 @@ data:
                insecure: true
              sending_queue:
                enabled: true
-               num_consumers: 50
+               num_consumers: 100
                queue_size: 150
     service:                                                                    
       extensions: [zpages]

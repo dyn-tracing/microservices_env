@@ -31,11 +31,11 @@ spec:
       - name: otelcollectorbackend
         args:
         - --config=/conf/collector-gateway-config-backend.yaml
-        image: jessberg/updated_versions:latest
+        image: jessberg/print:latest
         imagePullPolicy: Always
         resources:
           requests:
-            cpu: 3000m
+            cpu: 1000m
             memory: 4Gi
           limits:
             cpu: 4000m
@@ -119,8 +119,8 @@ data:
         limit_percentage: 75
         spike_limit_percentage: 30
       batch:
-        send_batch_size: 40000
-        send_batch_max_size: 60000
+        send_batch_size: 80000
+        send_batch_max_size: 100000
         timeout: 1s
       groupbyattrs:
 
@@ -146,8 +146,8 @@ data:
           enabled: true                                                         
           num_consumers: 100                                                    
           queue_size: 1000
-        num_of_digits_for_random_hash: 2
-        bucket_suffix: -snicket4
+        num_of_digits_for_random_hash: 7
+        bucket_suffix: -snicket-throughput
 
 
     service:                                                                    
