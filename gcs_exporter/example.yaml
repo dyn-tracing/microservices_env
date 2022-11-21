@@ -16,5 +16,5 @@ service:
       - otlp
       processors:
       exporters:
-      - googlecloudpubsub
+      - gcs_exporter
       - loadbalancerhttp

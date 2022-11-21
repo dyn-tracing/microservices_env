@@ -5,7 +5,7 @@ extensions:
     gomod: go.opentelemetry.io/collector v0.62.0
 
 exporters:
-  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter v0.0.0"
+  - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/gcs_exporter v0.0.0"
     path: "./gcs_exporter"
   - gomod: "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancerhttp v0.0.0"
     path: "./loadbalancerhttp"
@@ -30,6 +30,7 @@ receivers:
   - import: go.opentelemetry.io/collector/receiver/otlpreceiver
     gomod: go.opentelemetry.io/collector v0.62.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator v0.62.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver v0.62.0
 
 replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter => github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.62.0

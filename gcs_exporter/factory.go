@@ -55,7 +55,7 @@ func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *stor
 		userAgent:        strings.ReplaceAll(pCfg.UserAgent, "{{version}}", params.BuildInfo.Version),
 		ceSource:         fmt.Sprintf("/opentelemetry/collector/%s/%s", name, params.BuildInfo.Version),
 		config:           pCfg,
-		tracesMarshaler:  ptrace.NewProtoMarshaler(),
+		tracesMarshaler:  &ptrace.ProtoMarshaler{},
 	}
 	receiver.ceCompression, _ = pCfg.parseCompression()
 	exporters[pCfg] = receiver
