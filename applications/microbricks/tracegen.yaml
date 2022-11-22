@@ -13,9 +13,7 @@ spec:
     spec:
       containers:
       - name: tracegen
-        image: docker.io/jessberg/tracegenlargequeue:latest
-        # it won't allow me to do this without a duration, so you just make the duration about a day;  no way an experiment takes longer than that
-        args: ["-otlp-insecure", "-rate", "1000", "-otlp-endpoint", "35.202.14.193:9898", "-duration", "5000s", "--workers", "1"]
+        image: docker.io/haseebashfaq/test:v3
         resources:
             requests:
                 memory: 5Gi
@@ -35,3 +33,6 @@ spec:
   - name: "4317"
     port: 4317
     targetPort: 4317
+  - name: "6832"
+    port: 6832
+    targetPort: 6832
