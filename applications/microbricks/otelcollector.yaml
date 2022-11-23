@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: otelcollector
+  name: collector
 spec:
   selector:
     matchLabels:
-      app: otelcollector
+      app: collector
   template:
     metadata:
       labels:
-        app: otelcollector
+        app: collector
     spec:
       containers:
-      - name: otelcollector
+      - name: collector
         args:
         - --config=/conf/collector-gateway-config-template.yaml
-        image: otel/opentelemetry-collector:0.23.0
+        image: otel/opentelemetry-collector:latest
         imagePullPolicy: Always
         volumeMounts:
         - name: collector-gateway-config-template
@@ -29,18 +29,42 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: otelcollector
+  name: collector
 spec:
   type: ClusterIP
   selector:
-    app: otelcollector
+    app: collector
   ports:
-  - name: "6831"
+  - protocol: UDP
+    name: "6831"
     port: 6831
     targetPort: 6831
-  - name: "6832"
+  - protocol: UDP
+    name: "6832"
     port: 6832
     targetPort: 6832
+  - name: "1888"
+    port: 1888
+    targetPort: 1888
+  - name: "8080"
+    port: 8080
+    targetPort: 8080
+  - name: "8888"
+    port: 8888
+    targetPort: 8888
+  - name: "8889"
+    port: 8889
+    targetPort: 8889
+  - name: "13133"
+    port: 13133
+    targetPort: 13133
+  - name: "4317"
+    port: 4317
+    targetPort: 4317
+  - name: "55670"
+    port: 55670
+    targetPort: 55670
+
 ---
 apiVersion: v1                                                                  
 kind: ConfigMap                                                                 
@@ -54,6 +78,7 @@ data:
       jaeger:
         protocols:
           thrift_compact:
+            endpoint: 0.0.0.0:6832
     
     exporters:
       logging:
@@ -61,7 +86,7 @@ data:
     processors:
       batch:
 
-    service:                                                                    
+    service:                                                              
       pipelines:                                                                
         traces:                                                                 
           receivers: [jaeger] # Receive otlp-formatted data from other collector instances

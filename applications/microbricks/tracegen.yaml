@@ -36,3 +36,4 @@ spec:
   - name: "6832"
     port: 6832
     targetPort: 6832
+    protocol: UDP
