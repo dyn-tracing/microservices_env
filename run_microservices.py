@@ -71,7 +71,7 @@ CONFIG_MATRIX = {
         'gcloud_flags': f" --enable-autoupgrade --enable-autoscaling --min-nodes=5 --max-nodes=6 \
                                   --num-nodes=5  --machine-type e2-highmem-8 ", # to do experiments, 7 nodes
         'deploy_cmd': f"kubectl create secret generic pubsub-key --from-file=key.json=service_account.json ; \
-                        {APPLY_CMD} {APP_DIR}/microbricks ",
+                        {APPLY_CMD} {APP_DIR}/microbricks/",
         'undeploy_cmd': f"{DELETE_CMD} {APP_DIR}/microbricks "
     },
     'LWE': {
@@ -247,7 +247,7 @@ def deploy_application(application, cluster_name, tracegen_autoscaling, backend_
                   " Did you run the deployment script?")
         sys.exit(util.EXIT_FAILURE)
     # if we are load generator, deploy the collector in two parts:
-    if application == 'LG':
+    if application == 'LG' or application == 'MB':
         cmd = CONFIG_MATRIX[application]['deploy_cmd']
         result = util.exec_process(cmd + "otelcollectorbackend.yaml")
         application_wait()
@@ -257,7 +257,7 @@ def deploy_application(application, cluster_name, tracegen_autoscaling, backend_
         result = util.exec_process(cmd + "tracegen.yaml")
         application_wait()
         autoscale("tracegen", tracegen_autoscaling, get_deployments())
-    else:    
+    else:
         cmd = CONFIG_MATRIX[application]['deploy_cmd']
         result = util.exec_process(cmd)
         application_wait()
