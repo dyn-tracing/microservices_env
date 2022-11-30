@@ -63,9 +63,9 @@ func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *stor
 }
 
 // createDefaultConfig creates the default configuration for exporter.
-func createDefaultConfig() config.Exporter {
+func createDefaultConfig() component.ExporterConfig {
 	return &Config{
-		ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
+		ExporterSettings: config.NewExporterSettings(component.NewID(typeStr)),
 		UserAgent:        "opentelemetry-collector-contrib {{version}}",
 		TimeoutSettings:  exporterhelper.TimeoutSettings{Timeout: defaultTimeout},
         RetrySettings:    exporterhelper.NewDefaultRetrySettings(),
@@ -76,7 +76,7 @@ func createDefaultConfig() config.Exporter {
 func createTracesExporter(
 	ctx context.Context,
 	set component.ExporterCreateSettings,
-	cfg config.Exporter) (component.TracesExporter, error) {
+	cfg component.ExporterConfig) (component.TracesExporter, error) {
 
 	pCfg := cfg.(*Config)
 	storageExporter := ensureExporter(set, pCfg)
