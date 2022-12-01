@@ -30,6 +30,7 @@ receivers:
   - import: go.opentelemetry.io/collector/receiver/otlpreceiver
     gomod: go.opentelemetry.io/collector v0.66.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator v0.66.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver v0.66.0
 
 replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter => github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.66.0
