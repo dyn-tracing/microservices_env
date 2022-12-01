@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
       - name: tracegen
-        image: docker.io/haseebashfaq/test:v3
+        image: docker.io/haseebashfaq/bricks:v3
         resources:
             requests:
                 memory: 5Gi

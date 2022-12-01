@@ -164,4 +164,4 @@ data:
         traces:                                                                 
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: [memory_limiter, groupbytrace/custom, batch, groupbyattrs]
-          exporters: [logging, googlecloudstorage/customname]
+          exporters: [logging, jaeger, googlecloudstorage/customname]

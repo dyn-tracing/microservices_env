@@ -161,7 +161,7 @@ def start_kubernetes(platform, multizonal, application, cluster_name):
             cmd += "--region us-central1-a --node-locations us-central1-b "
             cmd += "us-central1-c us-central1-a "
         else:
-            cmd += "--zone=us-central1-a "
+            cmd += "--zone=us-west1-b "
         result = util.exec_process(cmd)
         cmd = f"gcloud services enable container.googleapis.com --project {PROJECT_ID} && "
         cmd += f"gcloud services enable monitoring.googleapis.com cloudtrace.googleapis.com "
@@ -185,7 +185,7 @@ def start_kubernetes(platform, multizonal, application, cluster_name):
 def stop_kubernetes(platform, cluster_name):
     if platform == "GCP":
         cmd = f"gcloud container clusters delete "
-        cmd += f"{cluster_name} --zone us-central1-a --quiet "
+        cmd += f"{cluster_name} --zone us-west1-b --quiet "
     else:
         # delete minikube
         cmd = "minikube delete"
@@ -249,6 +249,8 @@ def deploy_application(application, cluster_name, tracegen_autoscaling, backend_
     # if we are load generator, deploy the collector in two parts:
     if application == 'LG' or application == 'MB':
         cmd = CONFIG_MATRIX[application]['deploy_cmd']
+        result = util.exec_process(cmd + "jaeger.yaml")
+        application_wait()
         result = util.exec_process(cmd + "otelcollectorbackend.yaml")
         application_wait()
         autoscale("otelcollectorbackend", backend_autoscaling, get_deployments())
