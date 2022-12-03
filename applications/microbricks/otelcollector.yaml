@@ -31,7 +31,7 @@ spec:
       - name: otelcollector
         args:
         - --config=/conf/collector-gateway-config.yaml
-        image: jessberg/withjaegerreceiver:latest
+        image: jessberg/jaegerreceiverandfexception:latest
         imagePullPolicy: Always
         resources:
           requests:

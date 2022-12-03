@@ -13,12 +13,14 @@ spec:
     spec:
       containers:
       - name: tracegen
-        image: docker.io/haseebashfaq/bricks:v3
+        image: haseebashfaq/mb:v6
         resources:
             requests:
-                memory: 5Gi
+                cpu: 6000m
+                memory: 13Gi
             limits:
-                memory: 7Gi
+                cpu: 8000m
+                memory: 15Gi
 
 ---
 apiVersion: v1
