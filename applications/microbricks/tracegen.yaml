@@ -13,14 +13,14 @@ spec:
     spec:
       containers:
       - name: tracegen
-        image: haseebashfaq/alibaba:v10
+        image: haseebashfaq/alibaba:v12
         resources:
             requests:
                 cpu: 6000m
-                memory: 13Gi
+                memory: 30Gi
             limits:
                 cpu: 8000m
-                memory: 15Gi
+                memory: 40Gi
 
 ---
 apiVersion: v1
