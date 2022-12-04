@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
       - name: tracegen
-        image: haseebashfaq/mb:v6
+        image: haseebashfaq/alibaba:v10
         resources:
             requests:
                 cpu: 6000m
