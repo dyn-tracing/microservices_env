@@ -161,7 +161,7 @@ def start_kubernetes(platform, multizonal, application, cluster_name):
             cmd += "--region us-central1-a --node-locations us-central1-b "
             cmd += "us-central1-c us-central1-a "
         else:
-            cmd += "--zone=us-west1-b "
+            cmd += "--zone=us-central1-a "
         result = util.exec_process(cmd)
         cmd = f"gcloud services enable container.googleapis.com --project {PROJECT_ID} && "
         cmd += f"gcloud services enable monitoring.googleapis.com cloudtrace.googleapis.com "
@@ -185,7 +185,7 @@ def start_kubernetes(platform, multizonal, application, cluster_name):
 def stop_kubernetes(platform, cluster_name):
     if platform == "GCP":
         cmd = f"gcloud container clusters delete "
-        cmd += f"{cluster_name} --zone us-west1-b --quiet "
+        cmd += f"{cluster_name} --zone us-central1-a --quiet "
     else:
         # delete minikube
         cmd = "minikube delete"
