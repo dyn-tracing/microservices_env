@@ -4,6 +4,7 @@ import (
     "encoding/csv"
     "os"
     "io"
+    "encoding/hex"
     "log"
     "strconv"
     "go.opentelemetry.io/collector/pdata/ptrace"
@@ -18,6 +19,11 @@ type AliBabaSpan struct {
     ali_interface string
     downstream_microservice string
     response_time int
+}
+
+type TimeWithTrace struct {
+    timestamp int
+    trace ptrace.Traces
 }
 
 func createAliBabaSpan(row []string) AliBabaSpan {
@@ -61,12 +67,16 @@ func importAliBabaData(filename string, filenum int) map[string][]AliBabaSpan {
     return mapping
 }
 
-func makePData(aliBabaSpans []AliBabaSpan) ptrace.Traces {
+func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
     // Make a pdata of the data.
     traces := ptrace.NewTraces()
+    earliest_time := aliBabaSpans[0].timestamp
     for _, aliBabaSpan := range aliBabaSpans {
+        if aliBabaSpan.timestamp < earliest_time {
+            earliest_time = aliBabaSpan.timestamp
+        }
         batch := traces.ResourceSpans.AppendEmpty()
-        rs.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
+        batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
         ils := batch.ScopeSpans().AppendEmpty()
         span := ils.Spans().AppendEmpty()
         span.SetTraceID(hex.DecodeString(aliBabaSpan.trace_id))
@@ -74,7 +84,7 @@ func makePData(aliBabaSpans []AliBabaSpan) ptrace.Traces {
 
     // TODO: Now identify the root span
     // TODO: Follow the root span down, creating span IDs and identifying parent span IDs.
-    return traces
+    return TimeWithTrace {earliest_time, traces}
 }
 
 func main() {
@@ -87,11 +97,12 @@ func main() {
     for trace_id, aliBabaSpans := range traceIDToAliBabaSpans {
         // We need to create pdata spans
         pdataSpans := makePData(aliBabaSpans)
+        _ = pdataSpans
+        _ = trace_id
     }
     // TODO: Then organize the spans by time, and batch them.
 
     // TODO: Compute hashes
 
     // TODO: Send to storage
-    _ = aliBabaData
 }
