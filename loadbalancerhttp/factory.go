@@ -44,22 +44,22 @@ func NewFactory() component.ExporterFactory {
 	)
 }
 
-func createDefaultConfig() config.Exporter {
+func createDefaultConfig() component.ExporterConfig {
 	otlpFactory := otlphttpexporter.NewFactory()
 	otlpDefaultCfg := otlpFactory.CreateDefaultConfig().(*otlphttpexporter.Config)
 
 	return &Config{
-		ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
+		ExporterSettings: config.NewExporterSettings(component.NewID(typeStr)),
 		Protocol: Protocol{
 			OTLP: *otlpDefaultCfg,
 		},
 	}
 }
 
-func createTracesExporter(_ context.Context, params component.ExporterCreateSettings, cfg config.Exporter) (component.TracesExporter, error) {
+func createTracesExporter(_ context.Context, params component.ExporterCreateSettings, cfg component.ExporterConfig) (component.TracesExporter, error) {
 	return newTracesExporter(params, cfg, params.Logger.With(zap.String("loadbalancer", "traces")))
 }
 
-func createLogsExporter(_ context.Context, params component.ExporterCreateSettings, cfg config.Exporter) (component.LogsExporter, error) {
+func createLogsExporter(_ context.Context, params component.ExporterCreateSettings, cfg component.ExporterConfig) (component.LogsExporter, error) {
 	return newLogsExporter(params, cfg)
 }

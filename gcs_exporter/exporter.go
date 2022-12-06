@@ -142,6 +142,9 @@ func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[
     for i := 0; i< len(spans); i++ {
         if spans[i].parent == "" {
             root = i
+        } else if spans[i].parent == "ffffffffffffffff" {
+            spans[i].parent = ""
+            root = i
         }
     }
 
@@ -247,7 +250,7 @@ func (ex *storageExporter) spanBucketExists(ctx context.Context, serviceName str
                 }
 
             }
-        } 
+        }
     } else if err != nil {
         return fmt.Errorf("failed getting bucket attributes: %w", err)
     }

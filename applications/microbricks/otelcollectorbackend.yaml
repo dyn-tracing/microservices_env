@@ -1,0 +1,167 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otelcollectorbackend
+spec:
+  selector:
+    matchLabels:
+      app: otelcollectorbackend
+  template:
+    metadata:
+      labels:
+        app: otelcollectorbackend
+    spec:
+      # Init container retrieves the current cloud project id from the metadata server
+      # and inserts it into the collector config template
+      # https://cloud.google.com/compute/docs/storing-retrieving-metadata
+      initContainers:
+      - name: otel-gateway-init-backend
+        image: gcr.io/google.com/cloudsdktool/cloud-sdk:326.0.0-alpine
+        command:
+        - '/bin/bash'
+        - '-c'
+        - |
+           sed "s/{{PROJECT_ID}}/$(curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)/" /template/collector-gateway-config-template-backend.yaml >> /conf/collector-gateway-config-backend.yaml
+        volumeMounts:
+        - name: collector-gateway-config-template-backend
+          mountPath: /template
+        - name: collector-gateway-config-backend
+          mountPath: /conf
+      containers:
+      - name: otelcollectorbackend
+        args:
+        - --config=/conf/collector-gateway-config-backend.yaml
+        image: jessberg/jaegerreceiverandfexception:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 3000m
+            memory: 4Gi
+          limits:
+            cpu: 4000m
+            memory: 7Gi
+        env:
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: /var/secrets/google/key.json
+        volumeMounts:
+        - name: collector-gateway-config-backend
+          mountPath: /conf
+        - name: google-cloud-key
+          mountPath: /var/secrets/google
+      volumes:
+      # Simple ConfigMap volume with template file
+      - name: collector-gateway-config-template-backend
+        configMap:
+          items:
+          - key: collector-gateway-config-template-backend.yaml
+            path: collector-gateway-config-template-backend.yaml
+          name: collector-gateway-config-template-backend
+      # Create a volume to store the expanded template (with correct cloud project ID)
+      - name: collector-gateway-config-backend
+        emptyDir: {}
+      - name: google-cloud-key
+        secret:
+          secretName: pubsub-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otelcollectorbackend
+spec:
+  clusterIP: None
+  selector:
+    app: otelcollectorbackend
+  ports:
+  - protocol: UDP
+    name: "6831"
+    port: 6831
+    targetPort: 6831
+  - protocol: UDP
+    name: "6832"
+    port: 6832
+    targetPort: 6832
+  - name: "1888"
+    port: 1888
+    targetPort: 1888
+  - name: "8080"
+    port: 8080
+    targetPort: 8080
+  - name: "8888"
+    port: 8888
+    targetPort: 8888
+  - name: "8889"
+    port: 8889
+    targetPort: 8889
+  - name: "13133"
+    port: 13133
+    targetPort: 13133
+  - name: "4317"
+    port: 4317
+    targetPort: 4317
+  - name: "55670"
+    port: 55670
+    targetPort: 55670
+
+---                                                                             
+apiVersion: v1                                                                  
+kind: ConfigMap                                                                 
+metadata:                                                                       
+  name: collector-gateway-config-template-backend
+# Open Telemetry Collector config                                               
+# https://opentelemetry.io/docs/collector/configuration/                        
+data:                                                                           
+  collector-gateway-config-template-backend.yaml: |                                     
+    extensions:
+      zpages:
+    receivers:                                                                  
+      otlp:                                                                     
+        protocols:                                                              
+          http:
+    processors:
+      groupbytrace/custom:
+        wait_duration: 10s
+        num_traces: 1000000
+        num_workers: 1
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 30
+      batch:
+        send_batch_size: 40000
+        send_batch_max_size: 60000
+        timeout: 1s
+      groupbyattrs:
+
+    exporters:                                                                  
+      logging:
+      jaeger:
+        endpoint: "jaeger:14250"
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 100
+          queue_size: 150000
+      googlecloudstorage/customname:                                            
+        project: dynamic-tracing                                                
+        user_agent: opentelemetry-collector-contrib {{version}}                 
+        insecure: true                                                          
+        timeout: 5s                                                             
+        retry_on_failure:                                                       
+          enabled: true                                                         
+          initial_interval: 1s                                                  
+        sending_queue:                                                          
+          enabled: true                                                         
+          num_consumers: 100                                                    
+          queue_size: 1000
+        num_of_digits_for_random_hash: 2
+        bucket_suffix: -snicket4
+
+
+    service:                                                                    
+      extensions: [zpages]
+      pipelines:                                                                
+        traces:                                                                 
+          receivers: [otlp] # Receive otlp-formatted data from other collector instances
+          processors: [memory_limiter, groupbytrace/custom, batch, groupbyattrs]
+          exporters: [logging, jaeger, googlecloudstorage/customname]

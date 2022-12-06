@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracegen
+spec:
+  selector:
+    matchLabels:
+      app: tracegen
+  template:
+    metadata:
+      labels:
+        app: tracegen
+    spec:
+      containers:
+      - name: tracegen
+        image: haseebashfaq/alibaba:f
+        resources:
+            requests:
+                cpu: 6000m
+                memory: 30Gi
+            limits:
+                cpu: 8000m
+                memory: 40Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracegen
+spec:
+  type: ClusterIP 
+  selector:
+    app: tracegen
+  ports:
+  - name: "4317"
+    port: 4317
+    targetPort: 4317
+  - name: "6832"
+    port: 6832
+    targetPort: 6832
+    protocol: UDP

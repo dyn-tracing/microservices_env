@@ -62,8 +62,6 @@ func (config *Config) validate() error {
     return nil
 }
 
-var _ config.Exporter = (*Config)(nil)
-
 func (config *Config) parseCompression() (Compression, error) {
 	switch config.Compression {
 	case "gzip":
