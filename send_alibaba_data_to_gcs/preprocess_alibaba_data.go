@@ -62,7 +62,7 @@ func importAliBabaData(filename string, filenum int) map[string][]AliBabaSpan {
 }
 
 func makePData(aliBabaSpans []AliBabaSpan) ptrace.Traces {
-    // Make a protobuf of the data.
+    // Make a pdata of the data.
     traces := ptrace.NewTraces()
     for _, aliBabaSpan := range aliBabaSpans {
         batch := traces.ResourceSpans.AppendEmpty()
@@ -73,7 +73,7 @@ func makePData(aliBabaSpans []AliBabaSpan) ptrace.Traces {
     }
 
     // TODO: Now identify the root span
-    // TODO: Follow the root span down, attaching parent spans
+    // TODO: Follow the root span down, creating span IDs and identifying parent span IDs.
     return traces
 }
 
@@ -83,9 +83,15 @@ func main() {
         os.Exit(0)
     }
     filename := os.Args[1]
-    aliBabaData := importAliBabaData(filename, 1)
-    for trace_id, aliBabaSpans := range aliBabaData {
+    traceIDToAliBabaSpans := importAliBabaData(filename, 1)
+    for trace_id, aliBabaSpans := range traceIDToAliBabaSpans {
+        // We need to create pdata spans
         pdataSpans := makePData(aliBabaSpans)
     }
+    // TODO: Then organize the spans by time, and batch them.
+
+    // TODO: Compute hashes
+
+    // TODO: Send to storage
     _ = aliBabaData
 }
