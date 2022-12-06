@@ -8,6 +8,7 @@ import (
     "log"
     "strconv"
     "go.opentelemetry.io/collector/pdata/ptrace"
+    "go.opentelemetry.io/collector/pdata/pcommon"
 )
 
 type AliBabaSpan struct {
@@ -75,11 +76,18 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
         if aliBabaSpan.timestamp < earliest_time {
             earliest_time = aliBabaSpan.timestamp
         }
-        batch := traces.ResourceSpans.AppendEmpty()
+        batch := traces.ResourceSpans().AppendEmpty()
         batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
         ils := batch.ScopeSpans().AppendEmpty()
         span := ils.Spans().AppendEmpty()
-        span.SetTraceID(hex.DecodeString(aliBabaSpan.trace_id))
+        trace_id_bytes, err := hex.DecodeString(aliBabaSpan.trace_id)
+        tmpSlice := [16]byte{}
+        for i, b := range trace_id_bytes {
+            tmpSlice[i] = b
+        }
+        trace_id := pcommon.TraceID(tmpSlice)
+        span.SetTraceID(trace_id)
+        _ = err
     }
 
     // TODO: Now identify the root span
