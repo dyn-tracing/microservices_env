@@ -66,8 +66,8 @@ func createAliBabaSpan(row []string) AliBabaSpan {
 	newSpan.rpc_id = row[3]
 	newSpan.upstream_microservice = row[4]
 	newSpan.rpc_type = row[5]
-	newSpan.ali_interface = row[6]
-	newSpan.downstream_microservice = row[7]
+	newSpan.downstream_microservice = row[6]
+	newSpan.ali_interface = row[7]
 	newSpan.response_time, _ = strconv.Atoi(row[8])
 	return newSpan
 }
@@ -184,15 +184,19 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			earliest_time = aliBabaSpan.timestamp
 		}
 
-		batch := traces.ResourceSpans().AppendEmpty()
-		batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
-		ils := batch.ScopeSpans().AppendEmpty()
-		span := ils.Spans().AppendEmpty()
+        // ignore user calls
+        if aliBabaSpan.rpc_id == "0" {
+            continue
+        }
+        batch := traces.ResourceSpans().AppendEmpty()
+        batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
+        ils := batch.ScopeSpans().AppendEmpty()
+        span := ils.Spans().AppendEmpty()
 
-		trace_id_bytes, err := hex.DecodeString(aliBabaSpan.trace_id)
-		trace_id := pcommon.TraceID(bytesTo16Bytes(trace_id_bytes))
-		span.SetTraceID(trace_id)
-		_ = err
+        trace_id_bytes, err := hex.DecodeString(aliBabaSpan.trace_id)
+        trace_id := pcommon.TraceID(bytesTo16Bytes(trace_id_bytes))
+        span.SetTraceID(trace_id)
+        _ = err
 	}
     print("now traces has x num resource spans ", traces.ResourceSpans().Len())
 
@@ -209,6 +213,8 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		// Checking for cyclicty in traces
 		if _, ok := visited[top]; ok {
             println("found cycle")
+		    dm := aliBabaSpans[top].downstream_microservice
+            println("cycle found w dm of ", dm)
 			return TimeWithTrace{}
 		} else {
 			visited[top] = true
@@ -216,6 +222,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 
 		queue = queue[1:]
 		dm := aliBabaSpans[top].downstream_microservice
+        println("downstream microservice is ", dm)
 		nextLevel := upstreamMap[dm]
 		_ = nextLevel
 
@@ -227,13 +234,21 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 
 		for _, ele := range nextLevel {
 			traces.ResourceSpans().At(ele).ScopeSpans().At(0).Spans().At(0).SetParentSpanID(span_id)
+            queue = append(queue, ele)
 		}
 	}
 
+    for a, _ := range visited {
+        println("visited: ", a)
+    }
+
 	// Unreachibility thin'
-	for ind := range aliBabaSpans {
+	for ind, span := range aliBabaSpans {
 		if _, ok := visited[ind]; !ok {
             println("found unreachable spans")
+            println("ind: ", ind)
+            println("span.dm: ", span.downstream_microservice)
+            println("span.um: ", span.upstream_microservice)
 			return TimeWithTrace{}
 		}
 	}
