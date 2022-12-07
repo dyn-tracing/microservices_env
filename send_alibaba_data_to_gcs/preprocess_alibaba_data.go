@@ -1,22 +1,22 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
 	"encoding/csv"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
-    "context"
-    "sort"
-    "crypto/rand"
-    "math/big"
+	"math/big"
 	"os"
+	"sort"
 	"strconv"
-    "fmt"
 
-    storage "cloud.google.com/go/storage"
-    conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
+	storage "cloud.google.com/go/storage"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
 )
 
 type AliBabaSpan struct {
@@ -182,50 +182,60 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	return TimeWithTrace{earliest_time, traces}
 }
 
-func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client, bucket_suffix string) error {
-    resourceNameToSpans := make(map[string] ptrace.Traces)
-    for time_with_trace := range traces {
-        span := traces[time_with_trace].trace
-        for i := 0; i < span.ResourceSpans().Len(); i++ {
-            if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
-                if _, ok := resourceNameToSpans[sn.AsString()]; ok {
-                    span.ResourceSpans().At(i).CopyTo(resourceNameToSpans[sn.AsString()].ResourceSpans().AppendEmpty())
-                } else {
-                    newOrganizedSpans := ptrace.NewTraces()
-                    span.ResourceSpans().At(i).CopyTo(newOrganizedSpans.ResourceSpans().AppendEmpty())
-                    resourceNameToSpans[sn.AsString()] = newOrganizedSpans
-                }
-            }
-        }
-    }
+func serviceNameToBucketName(service string, suffix string) string {
+	return service + "-" + suffix
+}
 
-    // 3. Send each resource's spans to storage
-    tracesMarshaler := &ptrace.ProtoMarshaler{}
-    for resource, spans := range resourceNameToSpans {
-        bucketName := serviceNameToBucketName(resource, bucket_suffix)
-        bkt := client.Bucket(bucketName)
-        ret := spanBucketExists(resource)
-        if ret != nil {
-            print("resource is ", resource)
-            print("bucket name is ", bucketName)
-            print("span bucket exists error ", ret)
-            return ret
-        }
-        buffer, err := tracesMarshaler.MarshalTraces(spans)
-        if err != nil {
-            print("could not marshal traces")
-            return err
-        }
-        obj := bkt.Object(batch_name)
-        ctx := context.Background()
-        writer := obj.NewWriter(ctx)
-        if _, err := writer.Write(buffer); err != nil {
-            return fmt.Errorf("failed creating the span object: %w", err)
-        }
-        if err := writer.Close(); err != nil {
-            return fmt.Errorf("failed closing the span object: %w", err)
-        }
-    }
+func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client, bucket_suffix string) error {
+	ctx := context.Background()
+	resourceNameToSpans := make(map[string]ptrace.Traces)
+	for time_with_trace := range traces {
+		span := traces[time_with_trace].trace
+		for i := 0; i < span.ResourceSpans().Len(); i++ {
+			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+				if _, ok := resourceNameToSpans[sn.AsString()]; ok {
+					span.ResourceSpans().At(i).CopyTo(resourceNameToSpans[sn.AsString()].ResourceSpans().AppendEmpty())
+				} else {
+					newOrganizedSpans := ptrace.NewTraces()
+					span.ResourceSpans().At(i).CopyTo(newOrganizedSpans.ResourceSpans().AppendEmpty())
+					resourceNameToSpans[sn.AsString()] = newOrganizedSpans
+				}
+			}
+		}
+	}
+
+	// 3. Send each resource's spans to storage
+	tracesMarshaler := &ptrace.ProtoMarshaler{}
+	for resource, spans := range resourceNameToSpans {
+		bucketName := serviceNameToBucketName(resource, bucket_suffix)
+		bkt := client.Bucket(bucketName)
+
+		// Check if bucket exists or not, create one if needed
+		_, err := bkt.Attrs(ctx)
+		if err == storage.ErrBucketNotExist {
+			err = bkt.Create(ctx, "dyn-tracing", nil)
+			if err != nil {
+				print("Could not create bucket ", bucketName)
+			}
+		}
+
+		buffer, err := tracesMarshaler.MarshalTraces(spans)
+		if err != nil {
+			print("could not marshal traces")
+			return err
+		}
+		obj := bkt.Object(batch_name)
+		ctx := context.Background()
+		writer := obj.NewWriter(ctx)
+		if _, err := writer.Write(buffer); err != nil {
+			return fmt.Errorf("failed creating the span object: %w", err)
+		}
+		if err := writer.Close(); err != nil {
+			return fmt.Errorf("failed closing the span object: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) {
@@ -240,41 +250,41 @@ func main() {
 
 	filename := os.Args[1]
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1)
-    pdataTraces := make([]TimeWithTrace, 0)
+	pdataTraces := make([]TimeWithTrace, 0)
 	for _, aliBabaSpans := range traceIDToAliBabaSpans {
 		// We need to create pdata spans
 		timeAndpdataSpans := makePData(aliBabaSpans)
-        pdataTraces := append(pdataTraces, timeAndpdataSpans)
+		pdataTraces = append(pdataTraces, timeAndpdataSpans)
 	}
 	// TODO: Then organize the spans by time, and batch them.
-    sort.Slice(pdataTraces, func(i, j int) bool {
-        return pdataTraces[i].timestamp < pdataTraces[j].timestamp
-    })
+	sort.Slice(pdataTraces, func(i, j int) bool {
+		return pdataTraces[i].timestamp < pdataTraces[j].timestamp
+	})
 
-    // Now, we batch.
-    ctx := context.Background()
-    client, err := storage.NewClient(ctx)
-    if err != nil {
-        print("could not create gcs client")
-        os.Exit(0)
-    }
+	// Now, we batch.
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		print("could not create gcs client")
+		os.Exit(0)
+	}
 
-    j := 0
-    for j < len(pdataTraces) {
-        start := j
-        end := start + 1000
-        if end >= len(pdataTraces) {
-            end = len(pdataTraces) - 1
-        }
-        // Name of this batch is...
-        random, _ := rand.Int(rand.Reader, big.NewInt(100000000))
-        int_hash := strconv.FormatUint(uint64(random.Int64()), 10)
-        if len(int_hash) == 1 {
-            int_hash = "0"+int_hash
-        }
-        batch_name := int_hash[0:2] +
-            string(pdataTraces[start].timestamp) + string(pdataTraces[end].timestamp)
-        sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client, "-snicket-alibaba")
-        computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
-    }
+	j := 0
+	for j < len(pdataTraces) {
+		start := j
+		end := start + 1000
+		if end >= len(pdataTraces) {
+			end = len(pdataTraces) - 1
+		}
+		// Name of this batch is...
+		random, _ := rand.Int(rand.Reader, big.NewInt(100000000))
+		int_hash := strconv.FormatUint(uint64(random.Int64()), 10)
+		if len(int_hash) == 1 {
+			int_hash = "0" + int_hash
+		}
+		batch_name := int_hash[0:2] +
+			string(pdataTraces[start].timestamp) + string(pdataTraces[end].timestamp)
+		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client, "-snicket-alibaba")
+		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
+	}
 }
