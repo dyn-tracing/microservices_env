@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"io"
 	"log"
-	"math/rand"
+    "sort"
+    "crypto/rand"
+    "math/big"
 	"os"
 	"strconv"
 
@@ -176,6 +178,14 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	return TimeWithTrace{earliest_time, traces}
 }
 
+func sendBatchSpansToStorage(traces []TimeWithTrace) {
+
+}
+
+func computeHashesAndTraceStructToStorage(traces []TimeWithTrace) {
+
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		print("usage: ./preprocess_alibaba_data filename")
@@ -183,15 +193,34 @@ func main() {
 	}
 	filename := os.Args[1]
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1)
-	for trace_id, aliBabaSpans := range traceIDToAliBabaSpans {
+    pdataTraces := make([]TimeWithTrace, 0)
+	for _, aliBabaSpans := range traceIDToAliBabaSpans {
 		// We need to create pdata spans
-		pdataSpans := makePData(aliBabaSpans)
-		_ = pdataSpans
-		_ = trace_id
+		timeAndpdataSpans := makePData(aliBabaSpans)
+        pdataTraces := append(pdataTraces, timeAndpdataSpans)
 	}
 	// TODO: Then organize the spans by time, and batch them.
+    sort.Slice(pdataTraces, func(i, j int) bool {
+        return pdataTraces[i].timestamp < pdataTraces[j].timestamp
+    })
 
-	// TODO: Compute hashes
-
-	// TODO: Send to storage
+    // Now, we batch.
+    j := 0
+    for j < len(pdataTraces) {
+        start := j
+        end := start + 1000
+        if end >= len(pdataTraces) {
+            end = len(pdataTraces) - 1
+        }
+        // Name of this batch is...
+        random, _ := rand.Int(rand.Reader, big.NewInt(100000000))
+        int_hash := strconv.FormatUint(uint64(random.Int64()), 10)
+        if len(int_hash) == 1 {
+            int_hash = "0"+int_hash
+        }
+        batch_name := int_hash[0:2] +
+            string(pdataTraces[start].timestamp) + string(pdataTraces[end].timestamp)
+        sendBatchSpansToStorage(pdataTraces[start:end])
+        computeHashesAndTraceStructToStorage(pdataTraces[start:end])
+    }
 }
