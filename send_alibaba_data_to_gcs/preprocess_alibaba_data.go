@@ -27,7 +27,7 @@ const (
 	ProjectName = "dynamic-tracing"
     TraceBucket = "dyntraces"
     PrimeNumber = 97
-    BucketSuffix = "-snicket51"
+    BucketSuffix = "-snicket-alibaba"
 )
 
 type AliBabaSpan struct {
@@ -245,7 +245,7 @@ func serviceNameToBucketName(service string, suffix string) string {
 	return bucketID + "-" + suffix
 }
 
-func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client, bucket_suffix string) error {
+func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
 	ctx := context.Background()
 	resourceNameToSpans := make(map[string]ptrace.Traces)
 	for time_with_trace := range traces {
@@ -266,7 +266,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
 	for resource, spans := range resourceNameToSpans {
-		bucketName := serviceNameToBucketName(resource, bucket_suffix)
+		bucketName := serviceNameToBucketName(resource, BucketSuffix)
 		bkt := client.Bucket(bucketName)
 
 		// Check if bucket exists or not, create one if needed
@@ -494,11 +494,8 @@ func main() {
 		batch_name := int_hash[0:2] +
 			string(pdataTraces[start].timestamp) + string(pdataTraces[end].timestamp)
         _ = batch_name
-        print("batch anme ;is ", batch_name, "\n")
-        /*
-		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client, "-snicket-alibaba")
-		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
-        */
+		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
+		//computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
 	}
     print("done with everything")
 }
