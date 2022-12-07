@@ -7,11 +7,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+    "strings"
 	"log"
 	"math/big"
 	"os"
 	"sort"
 	"strconv"
+    "hash/fnv"
 
 	storage "cloud.google.com/go/storage"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -21,6 +23,8 @@ import (
 
 const (
 	ProjectName = "dynamic-tracing"
+    TraceBucket = "dyntraces"
+    primeNumber = 97
 )
 
 type AliBabaSpan struct {
@@ -34,9 +38,22 @@ type AliBabaSpan struct {
 	response_time           int
 }
 
+type spanStr struct {
+    parent string
+    id string
+    service string
+}
+
 type TimeWithTrace struct {
 	timestamp int
 	trace     ptrace.Traces
+}
+
+// https://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
+func hash(s string) uint32 {
+        h := fnv.New32a()
+        h.Write([]byte(s))
+        return h.Sum32()
 }
 
 func createAliBabaSpan(row []string) AliBabaSpan {
@@ -179,7 +196,12 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 }
 
 func serviceNameToBucketName(service string, suffix string) string {
-	return service + "-" + suffix
+    bucketID := strings.ReplaceAll(service, ".", "")
+    bucketID = strings.ReplaceAll(bucketID, "/", "")
+    bucketID = strings.ReplaceAll(bucketID, "google", "")
+    bucketID = strings.ReplaceAll(bucketID, "_", "")
+    bucketID = strings.ToLower(bucketID)
+	return bucketID + "-" + suffix
 }
 
 func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client, bucket_suffix string) error {
@@ -234,8 +256,153 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 	return nil
 }
 
-func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) {
+func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
+    // Don't need to do all the computation if you just have one span
+    spanToHash := make(map[*spanStr]int)
+    if len(spans) == 1 {
+        spanToHash[&spans[0]] = int(hash(spans[0].service))*primeNumber
+        return spanToHash, spanToHash[&spans[0]]
+    }
+    // 1. Find root
+    var root int
+    for i := 0; i< len(spans); i++ {
+        if spans[i].parent == "" {
+            root = i
+        } else if spans[i].parent == "ffffffffffffffff" {
+            spans[i].parent = ""
+            root = i
+        }
+    }
 
+    // 2. To do hashes, you need two mappings:  parent to child, and level to spans at that level
+    // 2. Need to make three mappings:
+    //    a. parent to child
+    //    b. level to spans
+    //    c. span to hash
+    parentToChild := make(map[*spanStr][]*spanStr)
+    childToParent := make(map[*spanStr]*spanStr)
+    levelToSpans := make(map[int][]*spanStr)
+    spanToLevel := make(map[*spanStr]int)
+    // 2a.  Fill out parent-child mappings
+    // is there a better way to traverse this?
+    // you could probably do a stack of visited and unvisited nodes
+    // but to wade through which are visited/unvisited each time it would be O(n) anyway, so I don't think
+    // you lose any efficiency in practice through the O(n^2) solution
+    for i:=0; i<len(spans); i++ {
+        for j:=0; j<len(spans); j++ {
+            if i != j && spans[j].parent == spans[i].id {
+                parentToChild[&spans[i]] = append(parentToChild[&spans[i]], &spans[j])
+                childToParent[&spans[j]] = &spans[i]
+            }
+        }
+    }
+
+    // 2b. Fill out level-spanID mappings
+
+    var maxLevel int;
+    maxLevel = 0
+
+    levelToSpans[0] = append(levelToSpans[0], &spans[root])
+    spanToLevel[&spans[root]] = 0
+
+
+    toAssignLevel := make([]*spanStr, 0)
+    toAssignLevel = append(toAssignLevel, parentToChild[&spans[root]]...)
+    for len(toAssignLevel) > 0 {
+        // dequeue
+        spanToAssign := toAssignLevel[0]
+        toAssignLevel = toAssignLevel[1:]
+        // enqueue your children
+        toAssignLevel = append(toAssignLevel, parentToChild[spanToAssign]...)
+        // parent is guaranteed in spanToLevel
+        parentLevel := spanToLevel[childToParent[spanToAssign]]
+        // my level is one more than my parent's
+        spanToLevel[spanToAssign] = parentLevel+1
+        levelToSpans[parentLevel+1] = append(levelToSpans[parentLevel+1], spanToAssign)
+        if parentLevel+1 > maxLevel {
+            maxLevel = parentLevel + 1
+        }
+    }
+    // 2c.  Use previous two mappings to fill out span ID to hash mappings
+    for i:= int(maxLevel); i>=0; i-- {
+        //ex.logger.Info("i", zap.Int("i", int(i)))
+        // for each level, create hash
+        for j:=0; j<len(levelToSpans[i]); j++ {
+            span := levelToSpans[i][j]
+            spanHash := int(hash(span.service)) + i*primeNumber
+            // now add all your children
+            for k:=0; k<len(parentToChild[span]); k++ {
+                spanHash += spanToHash[parentToChild[span][k]]
+            }
+            spanToHash[span] = spanHash
+        }
+
+    }
+    return spanToHash, spanToHash[&spans[root]]
+}
+
+func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
+    // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
+    ctx := context.Background()
+    traceStructBuf := dataBuffer{}
+    hashToTraceID := make(map[int][]string)
+    for _, trace := range traces {
+        // TODO: Find the trace ID
+        traceID := trace.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).TraceID()
+        var sp []spanStr
+        traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
+        for i := 0; i< trace.trace.ResourceSpans().Len(); i++ {
+            span := trace.trace.ResourceSpans().At(i).ScopeSpans().At(0).Spans().At(0)
+            parent := span.ParentSpanID().HexString()
+            spanID := span.SpanID().HexString()
+			if sn, ok := trace.trace.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+            sp = append(sp, spanStr{
+               parent: parent,
+               id: spanID,
+               service: sn.AsString()})
+
+            }
+        }
+        hashmap, hash := hashTrace(ctx, sp)
+        for i := 0; i< len(sp); i++ {
+            traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
+                strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
+        }
+        hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
+    }
+
+    /*
+    // 2. Put the trace structure buffer in storage
+    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket, ex.config.BucketSuffix))
+    ex.spanBucketExists(ctx, trace_bucket, false)
+
+    trace_obj := trace_bkt.Object(objectName)
+    w_trace := trace_obj.NewWriter(ctx)
+    if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
+        return fmt.Errorf("failed creating the trace object: %w", err)
+    }
+    if err := w_trace.Close(); err != nil {
+        return fmt.Errorf("failed closing the trace object %w", err)
+    }
+    // 3. Put the hash to trace ID mapping in storage
+    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes", ex.config.BucketSuffix))
+    ex.spanBucketExists(ctx, "tracehashes", false)
+    for hash, traces := range hashToTraceID {
+        traceIDs := dataBuffer{}
+        for i :=0; i<len(traces); i++ {
+            traceIDs.logEntry("%s", traces[i])
+        }
+        obj := bkt.Object(strconv.FormatUint(uint64(hash), 10)+"/"+objectName)
+        w := obj.NewWriter(ctx)
+        if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
+            return fmt.Errorf("failed creating the object: %w", err)
+        }
+        if err := w.Close(); err != nil {
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+objectName, err)
+        }
+    }
+    */
+    return nil
 }
 
 func main() {
@@ -252,7 +419,7 @@ func main() {
 		timeAndpdataSpans := makePData(aliBabaSpans)
 		pdataTraces = append(pdataTraces, timeAndpdataSpans)
 	}
-	// TODO: Then organize the spans by time, and batch them.
+	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
 		return pdataTraces[i].timestamp < pdataTraces[j].timestamp
 	})

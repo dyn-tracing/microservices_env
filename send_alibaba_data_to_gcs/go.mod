@@ -5,6 +5,7 @@ go 1.18
 require (
 	cloud.google.com/go/storage v1.28.0
 	go.opentelemetry.io/collector/pdata v0.66.0
+	go.opentelemetry.io/collector/semconv v0.66.0
 )
 
 require (
@@ -23,7 +24,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.opentelemetry.io/collector/semconv v0.66.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b // indirect
