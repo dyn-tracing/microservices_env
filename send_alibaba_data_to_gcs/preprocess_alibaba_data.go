@@ -10,6 +10,7 @@ import (
     "strings"
 	"log"
 	"math/big"
+    mathrand "math/rand"
 	"os"
     "errors"
 	"sort"
@@ -28,6 +29,9 @@ const (
     TraceBucket = "dyntraces"
     PrimeNumber = 97
     BucketSuffix = "-snicket-alibaba"
+    MicroserviceNameMapping = "names.json"
+    AnimalJSON = "animals.json"
+    ColorsJSON = "color_names.json"
 )
 
 type AliBabaSpan struct {
@@ -59,20 +63,122 @@ func hash(s string) uint32 {
         return h.Sum32()
 }
 
-func createAliBabaSpan(row []string) AliBabaSpan {
+func getAnimalNames() []string {
+	f, err := os.Open(AnimalJSON)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer f.Close()
+	animals := make([]string, 0)
+	csvReader := csv.NewReader(f)
+	for {
+		row, err := csvReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+        animals = append(animals, row[0])
+    }
+    return animals
+}
+
+func getColorNames() []string{
+	f, err := os.Open(ColorsJSON)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer f.Close()
+	colors := make([]string, 0)
+	csvReader := csv.NewReader(f)
+	for {
+		row, err := csvReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+        strings.ReplaceAll(row[0], " ", "")
+        colors = append(colors, row[0])
+    }
+    return colors
+}
+
+func getNewEntry(microservice_name_mapping *map[string]string, animalNames []string, colorNames []string, animal_color_to_hash *map[string]string) string {
+    found := false
+    for !found {
+        randomAnimalIndex := mathrand.Intn(len(animalNames))
+        randomColorIndex := mathrand.Intn(len(colorNames))
+        possibleName := animalNames[randomAnimalIndex] + colorNames[randomColorIndex]
+        if val, ok := *animal_color_to_hash[possibleName]; ok {
+            // sad, we've already tried this one
+            continue
+        } else {
+            return possibleName
+        }
+    }
+    return ""
+}
+
+func createAliBabaSpan(row []string, microservice_name_mapping *map[string]string, animalNames []string, colorNames []string, animalColorToHashName *map[string]string) AliBabaSpan {
+    // if already exists in map, great
+    if val, ok := microservice_name_mapping[row[4]]; ok {
+        newSpan.upstream_microservice = val
+    } else {
+        // create new entry in map
+        newEntry := getNewEntry(microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
+        microservice_name_mapping[row[4]] = newEntry
+        animalColorToHashName[newEntry] = row[4]
+    }
+    if val, ok := microservice_name_mapping[row[6]]; ok {
+        newSpan.downstream_microservice = val
+    } else {
+        // create new entry in map
+        newEntry := getNewEntry(microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
+        microservice_name_mapping[row[6]] = newEntry
+        animalColorToHashName[newEntry] = row[6]
+    }
 	var newSpan AliBabaSpan
 	newSpan.trace_id = row[1]
 	newSpan.timestamp, _ = strconv.Atoi(row[2])
 	newSpan.rpc_id = row[3]
-	newSpan.upstream_microservice = row[4]
 	newSpan.rpc_type = row[5]
-	newSpan.downstream_microservice = row[6]
 	newSpan.ali_interface = row[7]
 	newSpan.response_time, _ = strconv.Atoi(row[8])
 	return newSpan
 }
 
-func importAliBabaData(filename string, filenum int) map[string][]AliBabaSpan {
+func importNameMapping(MicroserviceNameMapping) map[string]string {
+    info, err := os.Stat(MicroserviceNameMapping)
+    if err == os.IsNotExist(err) {
+        return make(map[string]string)
+    }
+	f, err := os.Open(MicroserviceNameMapping)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer f.Close()
+	mapping := make(map[string]string)
+	csvReader := csv.NewReader(f)
+	for {
+		rec, err := csvReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+        mapping[row[0]] = row[1]
+    }
+    return mapping
+}
+
+func importAliBabaData(filename string, filenum int, microservice_name_mapping map[string]string) map[string][]AliBabaSpan {
 	f, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
@@ -80,6 +186,14 @@ func importAliBabaData(filename string, filenum int) map[string][]AliBabaSpan {
 
 	defer f.Close()
 	mapping := make(map[string][]AliBabaSpan)
+    animalNames := getAnimalNames()
+    colorNames := getColorNames()
+
+    // create mapping from fake name to real hash
+    animalColorToHashName = make([string]string)
+    for hash, color := range(microservice_name_mapping) {
+        animalColorToHashName[color] = hash
+    }
 
 	csvReader := csv.NewReader(f)
 	for {
@@ -90,7 +204,7 @@ func importAliBabaData(filename string, filenum int) map[string][]AliBabaSpan {
 		if err != nil {
 			log.Fatal(err)
 		}
-		newSpan := createAliBabaSpan(rec)
+		newSpan := createAliBabaSpan(rec, microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
 		mapping[newSpan.trace_id] = append(mapping[newSpan.trace_id], newSpan)
 	}
 	return mapping
@@ -238,10 +352,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		}
 	}
 
-    for a, _ := range visited {
-        println("visited: ", a)
-    }
-
 	// Unreachibility thin'
 	for ind, span := range aliBabaSpans {
 		if _, ok := visited[ind]; !ok {
@@ -262,15 +372,16 @@ func serviceNameToBucketName(service string, suffix string) string {
     bucketID = strings.ReplaceAll(bucketID, "google", "")
     bucketID = strings.ReplaceAll(bucketID, "_", "")
     bucketID = strings.ToLower(bucketID)
-	return bucketID + "-" + suffix
+	return bucketID + suffix
 }
 
 func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
-    print("sending batch to stoarge")
+    println("sending batch to stoarge")
 	ctx := context.Background()
 	resourceNameToSpans := make(map[string]ptrace.Traces)
 	for time_with_trace := range traces {
 		span := traces[time_with_trace].trace
+        println("size of resource spans is ", span.ResourceSpans().Len())
 		for i := 0; i < span.ResourceSpans().Len(); i++ {
 			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
 				if _, ok := resourceNameToSpans[sn.AsString()]; ok {
@@ -280,13 +391,15 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 					span.ResourceSpans().At(i).CopyTo(newOrganizedSpans.ResourceSpans().AppendEmpty())
 					resourceNameToSpans[sn.AsString()] = newOrganizedSpans
 				}
-			}
+			} else {
+                println("couldn't get service name")
+            }
 		}
 	}
 
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
-    print("size of resourceNameToSpans is ", len(resourceNameToSpans))
+    println("size of resourceNameToSpans is ", len(resourceNameToSpans))
 	for resource, spans := range resourceNameToSpans {
 		bucketName := serviceNameToBucketName(resource, BucketSuffix)
 		bkt := client.Bucket(bucketName)
@@ -297,6 +410,8 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 			err = bkt.Create(ctx, ProjectName, nil)
 			if err != nil {
 				print("Could not create bucket ", bucketName)
+                fmt.Errorf("failed creating the gRPC client to Storage: %w", err)
+                return err
 			}
 		}
 
@@ -472,6 +587,9 @@ func main() {
 	}
 
 	filename := os.Args[1]
+
+    // determine if name mapping file exists
+    microservice_hash_to_name = importNameMapping()
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1)
 	pdataTraces := make([]TimeWithTrace, 0)
     empty := TimeWithTrace{}
@@ -500,14 +618,15 @@ func main() {
 	}
     _ = client
 
-    print("batching spans")
-    print("len pdata traces is ", len(pdataTraces))
+    println("batching spans")
+    println("len pdata traces is ", len(pdataTraces))
+    println("len pdata traces spans is ", pdataTraces[0].trace.ResourceSpans().Len())
 	j := 0
 	for j < len(pdataTraces) {
 		start := j
 		end := start + 1000
 		if end >= len(pdataTraces) {
-			end = len(pdataTraces) - 1
+			end = len(pdataTraces)
 		}
 		// Name of this batch is...
 		random, _ := rand.Int(rand.Reader, big.NewInt(100000000))
@@ -516,11 +635,13 @@ func main() {
 			int_hash = "0" + int_hash
 		}
 		batch_name := int_hash[0:2] +
-			string(pdataTraces[start].timestamp) + string(pdataTraces[end].timestamp)
+			string(pdataTraces[start].timestamp) + string(pdataTraces[end-1].timestamp)
         _ = batch_name
+        println("start is ", start)
+        println("end is ", end)
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
 		//computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
         j += 1000
 	}
-    print("done with everything")
+    println("done with everything")
 }
