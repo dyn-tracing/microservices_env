@@ -127,7 +127,9 @@ func getNewEntry(microservice_name_mapping map[string]string, animalNames []stri
     return ""
 }
 
-func createAliBabaSpan(row []string, microservice_name_mapping map[string]string, animalNames []string, colorNames []string, animalColorToHashName map[string]string) AliBabaSpan {
+func createAliBabaSpan(row []string, microservice_name_mapping map[string]string,
+    animalNames []string, colorNames []string,
+    animalColorToHashName map[string]string) AliBabaSpan {
 	var newSpan AliBabaSpan
     // if already exists in map, great
     if val, ok := microservice_name_mapping[row[4]]; ok {
@@ -647,7 +649,7 @@ func main() {
         _ = batch_name
         println("batch name is ", batch_name)
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
-		//computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
+		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
 		j += 1000
 	}
     println("done with everything")
