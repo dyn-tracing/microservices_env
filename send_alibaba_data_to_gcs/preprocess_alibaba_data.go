@@ -29,9 +29,9 @@ const (
     TraceBucket = "dyntraces"
     PrimeNumber = 97
     BucketSuffix = "-snicket-alibaba"
-    MicroserviceNameMapping = "names.json"
-    AnimalJSON = "animals.json"
-    ColorsJSON = "color_names.json"
+    MicroserviceNameMapping = "names.csv"
+    AnimalJSON = "animals.csv"
+    ColorsJSON = "color_names.csv"
 	MissingData  = "(?)"
 )
 
@@ -81,7 +81,8 @@ func getAnimalNames() []string {
 		if err != nil {
 			log.Fatal(err)
 		}
-        animals = append(animals, row[0])
+        withoutSpaces := strings.ReplaceAll(row[0], " ", "")
+        animals = append(animals, withoutSpaces)
     }
     return animals
 }
@@ -103,8 +104,8 @@ func getColorNames() []string{
 		if err != nil {
 			log.Fatal(err)
 		}
-        strings.ReplaceAll(row[0], " ", "")
-        colors = append(colors, row[0])
+        withoutSpaces := strings.ReplaceAll(row[0], " ", "")
+        colors = append(colors, withoutSpaces)
     }
     return colors
 }
@@ -119,6 +120,7 @@ func getNewEntry(microservice_name_mapping map[string]string, animalNames []stri
             // sad, we've already tried this one
             continue
         } else {
+            println("possible ename is ", possibleName)
             return possibleName
         }
     }
@@ -135,6 +137,7 @@ func createAliBabaSpan(row []string, microservice_name_mapping map[string]string
         newEntry := getNewEntry(microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
         microservice_name_mapping[row[4]] = newEntry
         animalColorToHashName[newEntry] = row[4]
+        newSpan.upstream_microservice = newEntry
     }
     if val, ok := microservice_name_mapping[row[6]]; ok {
         newSpan.downstream_microservice = val
@@ -143,13 +146,16 @@ func createAliBabaSpan(row []string, microservice_name_mapping map[string]string
         newEntry := getNewEntry(microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
         microservice_name_mapping[row[6]] = newEntry
         animalColorToHashName[newEntry] = row[6]
+        newSpan.downstream_microservice = newEntry
     }
 	newSpan.trace_id = row[1]
 	newSpan.timestamp, _ = strconv.Atoi(row[2])
+    newSpan.timestamp = newSpan.timestamp + 1670427276 // We want realistic timestamps, so just adding time as of Dec 7th to get offsets in the 12 hour Alibaba period
 	newSpan.rpc_id = row[3]
 	newSpan.rpc_type = row[5]
 	newSpan.ali_interface = row[7]
 	newSpan.response_time, _ = strconv.Atoi(row[8])
+    println("span has um of ", newSpan.upstream_microservice, " and dm of ", newSpan.downstream_microservice)
 	return newSpan
 }
 
@@ -406,6 +412,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
     println("size of resourceNameToSpans is ", len(resourceNameToSpans))
 	for resource, spans := range resourceNameToSpans {
 		bucketName := serviceNameToBucketName(resource, BucketSuffix)
+        println("bucket to write to is ", bucketName)
 		bkt := client.Bucket(bucketName)
 
 		// Check if bucket exists or not, create one if needed
@@ -621,9 +628,6 @@ func main() {
 	}
 	_ = client
 
-    println("batching spans")
-    println("len pdata traces is ", len(pdataTraces))
-    println("len pdata traces spans is ", pdataTraces[0].trace.ResourceSpans().Len())
 	j := 0
 	for j < len(pdataTraces) {
 		start := j
@@ -637,11 +641,11 @@ func main() {
 		if len(int_hash) == 1 {
 			int_hash = "0" + int_hash
 		}
-		batch_name := int_hash[0:2] +
-			string(pdataTraces[start].timestamp) + string(pdataTraces[end-1].timestamp)
+		batch_name := int_hash[0:2] + "-" +
+			strconv.Itoa(pdataTraces[start].timestamp) + "-" +
+            strconv.Itoa(pdataTraces[end-1].timestamp)
         _ = batch_name
-        println("start is ", start)
-        println("end is ", end)
+        println("batch name is ", batch_name)
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
 		//computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
 		j += 1000
