@@ -33,6 +33,7 @@ const (
     AnimalJSON = "animals.csv"
     ColorsJSON = "color_names.csv"
 	MissingData  = "(?)"
+    BatchSize = 10000
 )
 
 type AliBabaSpan struct {
@@ -646,8 +647,9 @@ func main() {
 
 	j := 0
 	for j < len(pdataTraces) {
+        println("j is ", j)
 		start := j
-		end := start + 1000
+		end := start + BatchSize
 		if end >= len(pdataTraces) {
 			end = len(pdataTraces)
 		}
@@ -663,7 +665,7 @@ func main() {
         _ = batch_name
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
 		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
-		j += 1000
+		j += BatchSize
 	}
     println("done with everything")
 }
