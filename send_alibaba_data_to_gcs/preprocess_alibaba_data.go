@@ -61,14 +61,14 @@ func hash(s string) uint32 {
 
 func createAliBabaSpan(row []string) AliBabaSpan {
 	var newSpan AliBabaSpan
-	newSpan.timestamp, _ = strconv.Atoi(row[0])
 	newSpan.trace_id = row[1]
-	newSpan.rpc_id = row[2]
-	newSpan.upstream_microservice = row[3]
-	newSpan.rpc_type = row[4]
-	newSpan.ali_interface = row[5]
-	newSpan.downstream_microservice = row[6]
-	newSpan.response_time, _ = strconv.Atoi(row[7])
+	newSpan.timestamp, _ = strconv.Atoi(row[2])
+	newSpan.rpc_id = row[3]
+	newSpan.upstream_microservice = row[4]
+	newSpan.rpc_type = row[5]
+	newSpan.ali_interface = row[6]
+	newSpan.downstream_microservice = row[7]
+	newSpan.response_time, _ = strconv.Atoi(row[8])
 	return newSpan
 }
 
@@ -216,7 +216,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		nextLevel := upstreamMap[dm]
 		_ = nextLevel
 
-		raw_span_id := make([]byte, 16)
+		raw_span_id := make([]byte, 8)
 		rand.Read(raw_span_id)
 		span_id := pcommon.SpanID(bytesTo8Bytes(raw_span_id))
 		traces.ResourceSpans().At(top).ScopeSpans().At(0).Spans().At(0).SetSpanID(span_id)
@@ -233,7 +233,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			return TimeWithTrace{}
 		}
 	}
-
 	return TimeWithTrace{earliest_time, traces}
 }
 
@@ -453,11 +452,17 @@ func main() {
 	filename := os.Args[1]
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1)
 	pdataTraces := make([]TimeWithTrace, 0)
+    empty := TimeWithTrace{}
 	for _, aliBabaSpans := range traceIDToAliBabaSpans {
 		// We need to create pdata spans
 		timeAndpdataSpans := makePData(aliBabaSpans)
-		pdataTraces = append(pdataTraces, timeAndpdataSpans)
+        if timeAndpdataSpans != empty {
+		    pdataTraces = append(pdataTraces, timeAndpdataSpans)
+        }
 	}
+
+    print("organizing spans by time")
+
 	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
 		return pdataTraces[i].timestamp < pdataTraces[j].timestamp
@@ -470,7 +475,9 @@ func main() {
 		print("could not create gcs client")
 		os.Exit(0)
 	}
+    _ = client
 
+    print("batching spans")
 	j := 0
 	for j < len(pdataTraces) {
 		start := j
@@ -486,7 +493,12 @@ func main() {
 		}
 		batch_name := int_hash[0:2] +
 			string(pdataTraces[start].timestamp) + string(pdataTraces[end].timestamp)
+        _ = batch_name
+        print("batch anme ;is ", batch_name, "\n")
+        /*
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client, "-snicket-alibaba")
 		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
+        */
 	}
+    print("done with everything")
 }
