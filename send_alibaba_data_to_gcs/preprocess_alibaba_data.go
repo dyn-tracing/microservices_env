@@ -11,6 +11,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+    "errors"
 	"sort"
 	"strconv"
     "hash/fnv"
@@ -18,13 +19,15 @@ import (
 	storage "cloud.google.com/go/storage"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+    "google.golang.org/api/googleapi"
 	conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
 )
 
 const (
 	ProjectName = "dynamic-tracing"
     TraceBucket = "dyntraces"
-    primeNumber = 97
+    PrimeNumber = 97
+    BucketSuffix = "-snicket51"
 )
 
 type AliBabaSpan struct {
@@ -107,6 +110,45 @@ func bytesTo8Bytes(input []byte) [8]byte {
 		tmpSlice[i] = b
 	}
 	return tmpSlice
+}
+
+func spanBucketExists(ctx context.Context, serviceName string, isService bool, client *storage.Client) error {
+    var storageClassAndLocation storage.BucketAttrs
+    if isService {
+        labels := make(map[string]string)
+        labels["bucket_type"] = "microservice"
+        storageClassAndLocation = storage.BucketAttrs{
+            StorageClass: "STANDARD",
+            Location:     "us-central1",
+            LocationType: "region",
+            Labels:       labels,
+        }
+    } else {
+        storageClassAndLocation = storage.BucketAttrs{
+            StorageClass: "STANDARD",
+            Location:     "us-central1",
+            LocationType: "region",
+        }
+    }
+    bkt := client.Bucket(serviceNameToBucketName(serviceName, BucketSuffix))
+    _, err := bkt.Attrs(ctx)
+    if err == storage.ErrBucketNotExist {
+        if crErr := bkt.Create(ctx, ProjectName, &storageClassAndLocation); crErr != nil {
+            var e *googleapi.Error
+            if ok := errors.As(crErr, &e); ok {
+                if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+                    return fmt.Errorf("failed creating bucket: %w", crErr)
+                } else {
+                    print("got 409")
+                    return nil;
+                }
+
+            }
+        }
+    } else if err != nil {
+        return fmt.Errorf("failed getting bucket attributes: %w", err)
+    }
+    return err
 }
 
 func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
@@ -260,7 +302,7 @@ func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
     // Don't need to do all the computation if you just have one span
     spanToHash := make(map[*spanStr]int)
     if len(spans) == 1 {
-        spanToHash[&spans[0]] = int(hash(spans[0].service))*primeNumber
+        spanToHash[&spans[0]] = int(hash(spans[0].service))*PrimeNumber
         return spanToHash, spanToHash[&spans[0]]
     }
     // 1. Find root
@@ -329,7 +371,7 @@ func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
         // for each level, create hash
         for j:=0; j<len(levelToSpans[i]); j++ {
             span := levelToSpans[i][j]
-            spanHash := int(hash(span.service)) + i*primeNumber
+            spanHash := int(hash(span.service)) + i*PrimeNumber
             // now add all your children
             for k:=0; k<len(parentToChild[span]); k++ {
                 spanHash += spanToHash[parentToChild[span][k]]
@@ -347,7 +389,6 @@ func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name str
     traceStructBuf := dataBuffer{}
     hashToTraceID := make(map[int][]string)
     for _, trace := range traces {
-        // TODO: Find the trace ID
         traceID := trace.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).TraceID()
         var sp []spanStr
         traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
@@ -371,12 +412,11 @@ func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name str
         hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
     }
 
-    /*
     // 2. Put the trace structure buffer in storage
-    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket, ex.config.BucketSuffix))
-    ex.spanBucketExists(ctx, trace_bucket, false)
+    trace_bkt := client.Bucket(serviceNameToBucketName(TraceBucket, BucketSuffix))
+    spanBucketExists(ctx, TraceBucket, false, client)
 
-    trace_obj := trace_bkt.Object(objectName)
+    trace_obj := trace_bkt.Object(batch_name)
     w_trace := trace_obj.NewWriter(ctx)
     if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
         return fmt.Errorf("failed creating the trace object: %w", err)
@@ -385,23 +425,22 @@ func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name str
         return fmt.Errorf("failed closing the trace object %w", err)
     }
     // 3. Put the hash to trace ID mapping in storage
-    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes", ex.config.BucketSuffix))
-    ex.spanBucketExists(ctx, "tracehashes", false)
+    bkt := client.Bucket(serviceNameToBucketName("tracehashes", BucketSuffix))
+    spanBucketExists(ctx, "tracehashes", false, client)
     for hash, traces := range hashToTraceID {
         traceIDs := dataBuffer{}
         for i :=0; i<len(traces); i++ {
             traceIDs.logEntry("%s", traces[i])
         }
-        obj := bkt.Object(strconv.FormatUint(uint64(hash), 10)+"/"+objectName)
+        obj := bkt.Object(strconv.FormatUint(uint64(hash), 10)+"/"+batch_name)
         w := obj.NewWriter(ctx)
         if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
             return fmt.Errorf("failed creating the object: %w", err)
         }
         if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+objectName, err)
+            return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err)
         }
     }
-    */
     return nil
 }
 
