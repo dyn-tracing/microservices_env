@@ -5,23 +5,23 @@ import (
 	"crypto/rand"
 	"encoding/csv"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
-    "strings"
 	"log"
 	"math/big"
     mathrand "math/rand"
 	"os"
-    "errors"
 	"sort"
 	"strconv"
-    "hash/fnv"
+	"strings"
 
 	storage "cloud.google.com/go/storage"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-    "google.golang.org/api/googleapi"
 	conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
+	"google.golang.org/api/googleapi"
 )
 
 const (
@@ -32,6 +32,7 @@ const (
     MicroserviceNameMapping = "names.json"
     AnimalJSON = "animals.json"
     ColorsJSON = "color_names.json"
+	MissingData  = "(?)"
 )
 
 type AliBabaSpan struct {
@@ -46,9 +47,9 @@ type AliBabaSpan struct {
 }
 
 type spanStr struct {
-    parent string
-    id string
-    service string
+	parent  string
+	id      string
+	service string
 }
 
 type TimeWithTrace struct {
@@ -58,9 +59,9 @@ type TimeWithTrace struct {
 
 // https://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
 func hash(s string) uint32 {
-        h := fnv.New32a()
-        h.Write([]byte(s))
-        return h.Sum32()
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
 }
 
 func getAnimalNames() []string {
@@ -227,46 +228,46 @@ func bytesTo8Bytes(input []byte) [8]byte {
 }
 
 func spanBucketExists(ctx context.Context, serviceName string, isService bool, client *storage.Client) error {
-    var storageClassAndLocation storage.BucketAttrs
-    if isService {
-        labels := make(map[string]string)
-        labels["bucket_type"] = "microservice"
-        storageClassAndLocation = storage.BucketAttrs{
-            StorageClass: "STANDARD",
-            Location:     "us-central1",
-            LocationType: "region",
-            Labels:       labels,
-        }
-    } else {
-        storageClassAndLocation = storage.BucketAttrs{
-            StorageClass: "STANDARD",
-            Location:     "us-central1",
-            LocationType: "region",
-        }
-    }
-    bkt := client.Bucket(serviceNameToBucketName(serviceName, BucketSuffix))
-    _, err := bkt.Attrs(ctx)
-    if err == storage.ErrBucketNotExist {
-        if crErr := bkt.Create(ctx, ProjectName, &storageClassAndLocation); crErr != nil {
-            var e *googleapi.Error
-            if ok := errors.As(crErr, &e); ok {
-                if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
-                    return fmt.Errorf("failed creating bucket: %w", crErr)
-                } else {
-                    print("got 409")
-                    return nil;
-                }
+	var storageClassAndLocation storage.BucketAttrs
+	if isService {
+		labels := make(map[string]string)
+		labels["bucket_type"] = "microservice"
+		storageClassAndLocation = storage.BucketAttrs{
+			StorageClass: "STANDARD",
+			Location:     "us-central1",
+			LocationType: "region",
+			Labels:       labels,
+		}
+	} else {
+		storageClassAndLocation = storage.BucketAttrs{
+			StorageClass: "STANDARD",
+			Location:     "us-central1",
+			LocationType: "region",
+		}
+	}
+	bkt := client.Bucket(serviceNameToBucketName(serviceName, BucketSuffix))
+	_, err := bkt.Attrs(ctx)
+	if err == storage.ErrBucketNotExist {
+		if crErr := bkt.Create(ctx, ProjectName, &storageClassAndLocation); crErr != nil {
+			var e *googleapi.Error
+			if ok := errors.As(crErr, &e); ok {
+				if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+					return fmt.Errorf("failed creating bucket: %w", crErr)
+				} else {
+					print("got 409")
+					return nil
+				}
 
-            }
-        }
-    } else if err != nil {
-        return fmt.Errorf("failed getting bucket attributes: %w", err)
-    }
-    return err
+			}
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed getting bucket attributes: %w", err)
+	}
+	return err
 }
 
 func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
-    println("making pdata, alibabapsans len is ", len(aliBabaSpans))
+	println("making pdata, alibabapsans len is ", len(aliBabaSpans))
 	root_span_index := -1
 
 	for ind, aliBabaSpan := range aliBabaSpans {
@@ -298,21 +299,21 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			earliest_time = aliBabaSpan.timestamp
 		}
 
-        // ignore user calls
-        if aliBabaSpan.rpc_id == "0" {
-            continue
-        }
-        batch := traces.ResourceSpans().AppendEmpty()
-        batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
-        ils := batch.ScopeSpans().AppendEmpty()
-        span := ils.Spans().AppendEmpty()
+		// ignore user calls
+		if aliBabaSpan.rpc_id == "0" {
+			continue
+		}
+		batch := traces.ResourceSpans().AppendEmpty()
+		batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
+		ils := batch.ScopeSpans().AppendEmpty()
+		span := ils.Spans().AppendEmpty()
 
-        trace_id_bytes, err := hex.DecodeString(aliBabaSpan.trace_id)
-        trace_id := pcommon.TraceID(bytesTo16Bytes(trace_id_bytes))
-        span.SetTraceID(trace_id)
-        _ = err
+		trace_id_bytes, err := hex.DecodeString(aliBabaSpan.trace_id)
+		trace_id := pcommon.TraceID(bytesTo16Bytes(trace_id_bytes))
+		span.SetTraceID(trace_id)
+		_ = err
 	}
-    print("now traces has x num resource spans ", traces.ResourceSpans().Len())
+	println("now traces has x num resource spans ", traces.ResourceSpans().Len())
 
 	queue := make([]int, 0)
 	queue = append(queue, root_span_index)
@@ -326,9 +327,9 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 
 		// Checking for cyclicty in traces
 		if _, ok := visited[top]; ok {
-            println("found cycle")
-		    dm := aliBabaSpans[top].downstream_microservice
-            println("cycle found w dm of ", dm)
+			println("found cycle")
+			dm := aliBabaSpans[top].downstream_microservice
+			println("cycle found w dm of ", dm)
 			return TimeWithTrace{}
 		} else {
 			visited[top] = true
@@ -336,9 +337,11 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 
 		queue = queue[1:]
 		dm := aliBabaSpans[top].downstream_microservice
-        println("downstream microservice is ", dm)
 		nextLevel := upstreamMap[dm]
-		_ = nextLevel
+
+		if dm == aliBabaSpans[top].upstream_microservice || dm == MissingData {
+			nextLevel = []int{}
+		}
 
 		raw_span_id := make([]byte, 8)
 		rand.Read(raw_span_id)
@@ -346,23 +349,24 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		traces.ResourceSpans().At(top).ScopeSpans().At(0).Spans().At(0).SetSpanID(span_id)
 		traces.ResourceSpans().At(top).ScopeSpans().At(0).Spans().At(0).SetParentSpanID(pcommon.SpanID([8]byte{0, 0, 0, 0, 0, 0, 0, 0}))
 
+		// log.Println("Adding: ")
 		for _, ele := range nextLevel {
+			// log.Print(ele, " ")
 			traces.ResourceSpans().At(ele).ScopeSpans().At(0).Spans().At(0).SetParentSpanID(span_id)
-            queue = append(queue, ele)
+			queue = append(queue, ele)
 		}
+		// log.Println(".")
 	}
 
 	// Unreachibility thin'
-	for ind, span := range aliBabaSpans {
+	for ind := 0; ind < traces.ResourceSpans().Len(); ind++ {
 		if _, ok := visited[ind]; !ok {
-            println("found unreachable spans")
-            println("ind: ", ind)
-            println("span.dm: ", span.downstream_microservice)
-            println("span.um: ", span.upstream_microservice)
+			println("found unreachable spans")
+			println("ind: ", ind)
 			return TimeWithTrace{}
 		}
 	}
-    print("at return time traces has resource spans ", traces.ResourceSpans().Len())
+	log.Println("at return time traces has resource spans ", traces.ResourceSpans().Len())
 	return TimeWithTrace{earliest_time, traces}
 }
 
@@ -435,149 +439,148 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 }
 
 func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
-    // Don't need to do all the computation if you just have one span
-    spanToHash := make(map[*spanStr]int)
-    if len(spans) == 1 {
-        spanToHash[&spans[0]] = int(hash(spans[0].service))*PrimeNumber
-        return spanToHash, spanToHash[&spans[0]]
-    }
-    // 1. Find root
-    var root int
-    for i := 0; i< len(spans); i++ {
-        if spans[i].parent == "" {
-            root = i
-        } else if spans[i].parent == "ffffffffffffffff" {
-            spans[i].parent = ""
-            root = i
-        }
-    }
+	// Don't need to do all the computation if you just have one span
+	spanToHash := make(map[*spanStr]int)
+	if len(spans) == 1 {
+		spanToHash[&spans[0]] = int(hash(spans[0].service)) * PrimeNumber
+		return spanToHash, spanToHash[&spans[0]]
+	}
+	// 1. Find root
+	var root int
+	for i := 0; i < len(spans); i++ {
+		if spans[i].parent == "" {
+			root = i
+		} else if spans[i].parent == "ffffffffffffffff" {
+			spans[i].parent = ""
+			root = i
+		}
+	}
 
-    // 2. To do hashes, you need two mappings:  parent to child, and level to spans at that level
-    // 2. Need to make three mappings:
-    //    a. parent to child
-    //    b. level to spans
-    //    c. span to hash
-    parentToChild := make(map[*spanStr][]*spanStr)
-    childToParent := make(map[*spanStr]*spanStr)
-    levelToSpans := make(map[int][]*spanStr)
-    spanToLevel := make(map[*spanStr]int)
-    // 2a.  Fill out parent-child mappings
-    // is there a better way to traverse this?
-    // you could probably do a stack of visited and unvisited nodes
-    // but to wade through which are visited/unvisited each time it would be O(n) anyway, so I don't think
-    // you lose any efficiency in practice through the O(n^2) solution
-    for i:=0; i<len(spans); i++ {
-        for j:=0; j<len(spans); j++ {
-            if i != j && spans[j].parent == spans[i].id {
-                parentToChild[&spans[i]] = append(parentToChild[&spans[i]], &spans[j])
-                childToParent[&spans[j]] = &spans[i]
-            }
-        }
-    }
+	// 2. To do hashes, you need two mappings:  parent to child, and level to spans at that level
+	// 2. Need to make three mappings:
+	//    a. parent to child
+	//    b. level to spans
+	//    c. span to hash
+	parentToChild := make(map[*spanStr][]*spanStr)
+	childToParent := make(map[*spanStr]*spanStr)
+	levelToSpans := make(map[int][]*spanStr)
+	spanToLevel := make(map[*spanStr]int)
+	// 2a.  Fill out parent-child mappings
+	// is there a better way to traverse this?
+	// you could probably do a stack of visited and unvisited nodes
+	// but to wade through which are visited/unvisited each time it would be O(n) anyway, so I don't think
+	// you lose any efficiency in practice through the O(n^2) solution
+	for i := 0; i < len(spans); i++ {
+		for j := 0; j < len(spans); j++ {
+			if i != j && spans[j].parent == spans[i].id {
+				parentToChild[&spans[i]] = append(parentToChild[&spans[i]], &spans[j])
+				childToParent[&spans[j]] = &spans[i]
+			}
+		}
+	}
 
-    // 2b. Fill out level-spanID mappings
+	// 2b. Fill out level-spanID mappings
 
-    var maxLevel int;
-    maxLevel = 0
+	var maxLevel int
+	maxLevel = 0
 
-    levelToSpans[0] = append(levelToSpans[0], &spans[root])
-    spanToLevel[&spans[root]] = 0
+	levelToSpans[0] = append(levelToSpans[0], &spans[root])
+	spanToLevel[&spans[root]] = 0
 
+	toAssignLevel := make([]*spanStr, 0)
+	toAssignLevel = append(toAssignLevel, parentToChild[&spans[root]]...)
+	for len(toAssignLevel) > 0 {
+		// dequeue
+		spanToAssign := toAssignLevel[0]
+		toAssignLevel = toAssignLevel[1:]
+		// enqueue your children
+		toAssignLevel = append(toAssignLevel, parentToChild[spanToAssign]...)
+		// parent is guaranteed in spanToLevel
+		parentLevel := spanToLevel[childToParent[spanToAssign]]
+		// my level is one more than my parent's
+		spanToLevel[spanToAssign] = parentLevel + 1
+		levelToSpans[parentLevel+1] = append(levelToSpans[parentLevel+1], spanToAssign)
+		if parentLevel+1 > maxLevel {
+			maxLevel = parentLevel + 1
+		}
+	}
+	// 2c.  Use previous two mappings to fill out span ID to hash mappings
+	for i := int(maxLevel); i >= 0; i-- {
+		//ex.logger.Info("i", zap.Int("i", int(i)))
+		// for each level, create hash
+		for j := 0; j < len(levelToSpans[i]); j++ {
+			span := levelToSpans[i][j]
+			spanHash := int(hash(span.service)) + i*PrimeNumber
+			// now add all your children
+			for k := 0; k < len(parentToChild[span]); k++ {
+				spanHash += spanToHash[parentToChild[span][k]]
+			}
+			spanToHash[span] = spanHash
+		}
 
-    toAssignLevel := make([]*spanStr, 0)
-    toAssignLevel = append(toAssignLevel, parentToChild[&spans[root]]...)
-    for len(toAssignLevel) > 0 {
-        // dequeue
-        spanToAssign := toAssignLevel[0]
-        toAssignLevel = toAssignLevel[1:]
-        // enqueue your children
-        toAssignLevel = append(toAssignLevel, parentToChild[spanToAssign]...)
-        // parent is guaranteed in spanToLevel
-        parentLevel := spanToLevel[childToParent[spanToAssign]]
-        // my level is one more than my parent's
-        spanToLevel[spanToAssign] = parentLevel+1
-        levelToSpans[parentLevel+1] = append(levelToSpans[parentLevel+1], spanToAssign)
-        if parentLevel+1 > maxLevel {
-            maxLevel = parentLevel + 1
-        }
-    }
-    // 2c.  Use previous two mappings to fill out span ID to hash mappings
-    for i:= int(maxLevel); i>=0; i-- {
-        //ex.logger.Info("i", zap.Int("i", int(i)))
-        // for each level, create hash
-        for j:=0; j<len(levelToSpans[i]); j++ {
-            span := levelToSpans[i][j]
-            spanHash := int(hash(span.service)) + i*PrimeNumber
-            // now add all your children
-            for k:=0; k<len(parentToChild[span]); k++ {
-                spanHash += spanToHash[parentToChild[span][k]]
-            }
-            spanToHash[span] = spanHash
-        }
-
-    }
-    return spanToHash, spanToHash[&spans[root]]
+	}
+	return spanToHash, spanToHash[&spans[root]]
 }
 
 func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
-    // 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
-    ctx := context.Background()
-    traceStructBuf := dataBuffer{}
-    hashToTraceID := make(map[int][]string)
-    for _, trace := range traces {
-        traceID := trace.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).TraceID()
-        var sp []spanStr
-        traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
-        for i := 0; i< trace.trace.ResourceSpans().Len(); i++ {
-            span := trace.trace.ResourceSpans().At(i).ScopeSpans().At(0).Spans().At(0)
-            parent := span.ParentSpanID().HexString()
-            spanID := span.SpanID().HexString()
+	// 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
+	ctx := context.Background()
+	traceStructBuf := dataBuffer{}
+	hashToTraceID := make(map[int][]string)
+	for _, trace := range traces {
+		traceID := trace.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).TraceID()
+		var sp []spanStr
+		traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
+		for i := 0; i < trace.trace.ResourceSpans().Len(); i++ {
+			span := trace.trace.ResourceSpans().At(i).ScopeSpans().At(0).Spans().At(0)
+			parent := span.ParentSpanID().HexString()
+			spanID := span.SpanID().HexString()
 			if sn, ok := trace.trace.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
-            sp = append(sp, spanStr{
-               parent: parent,
-               id: spanID,
-               service: sn.AsString()})
+				sp = append(sp, spanStr{
+					parent:  parent,
+					id:      spanID,
+					service: sn.AsString()})
 
-            }
-        }
-        hashmap, hash := hashTrace(ctx, sp)
-        for i := 0; i< len(sp); i++ {
-            traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
-                strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
-        }
-        hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
-    }
+			}
+		}
+		hashmap, hash := hashTrace(ctx, sp)
+		for i := 0; i < len(sp); i++ {
+			traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
+				strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
+		}
+		hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
+	}
 
-    // 2. Put the trace structure buffer in storage
-    trace_bkt := client.Bucket(serviceNameToBucketName(TraceBucket, BucketSuffix))
-    spanBucketExists(ctx, TraceBucket, false, client)
+	// 2. Put the trace structure buffer in storage
+	trace_bkt := client.Bucket(serviceNameToBucketName(TraceBucket, BucketSuffix))
+	spanBucketExists(ctx, TraceBucket, false, client)
 
-    trace_obj := trace_bkt.Object(batch_name)
-    w_trace := trace_obj.NewWriter(ctx)
-    if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
-        return fmt.Errorf("failed creating the trace object: %w", err)
-    }
-    if err := w_trace.Close(); err != nil {
-        return fmt.Errorf("failed closing the trace object %w", err)
-    }
-    // 3. Put the hash to trace ID mapping in storage
-    bkt := client.Bucket(serviceNameToBucketName("tracehashes", BucketSuffix))
-    spanBucketExists(ctx, "tracehashes", false, client)
-    for hash, traces := range hashToTraceID {
-        traceIDs := dataBuffer{}
-        for i :=0; i<len(traces); i++ {
-            traceIDs.logEntry("%s", traces[i])
-        }
-        obj := bkt.Object(strconv.FormatUint(uint64(hash), 10)+"/"+batch_name)
-        w := obj.NewWriter(ctx)
-        if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
-            return fmt.Errorf("failed creating the object: %w", err)
-        }
-        if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err)
-        }
-    }
-    return nil
+	trace_obj := trace_bkt.Object(batch_name)
+	w_trace := trace_obj.NewWriter(ctx)
+	if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
+		return fmt.Errorf("failed creating the trace object: %w", err)
+	}
+	if err := w_trace.Close(); err != nil {
+		return fmt.Errorf("failed closing the trace object %w", err)
+	}
+	// 3. Put the hash to trace ID mapping in storage
+	bkt := client.Bucket(serviceNameToBucketName("tracehashes", BucketSuffix))
+	spanBucketExists(ctx, "tracehashes", false, client)
+	for hash, traces := range hashToTraceID {
+		traceIDs := dataBuffer{}
+		for i := 0; i < len(traces); i++ {
+			traceIDs.logEntry("%s", traces[i])
+		}
+		obj := bkt.Object(strconv.FormatUint(uint64(hash), 10) + "/" + batch_name)
+		w := obj.NewWriter(ctx)
+		if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
+			return fmt.Errorf("failed creating the object: %w", err)
+		}
+		if err := w.Close(); err != nil {
+			return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err)
+		}
+	}
+	return nil
 }
 
 func main() {
@@ -592,17 +595,17 @@ func main() {
     microservice_hash_to_name = importNameMapping()
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1)
 	pdataTraces := make([]TimeWithTrace, 0)
-    empty := TimeWithTrace{}
+	empty := TimeWithTrace{}
 	for _, aliBabaSpans := range traceIDToAliBabaSpans {
 		// We need to create pdata spans
 		timeAndpdataSpans := makePData(aliBabaSpans)
-        if timeAndpdataSpans != empty {
-		    pdataTraces = append(pdataTraces, timeAndpdataSpans)
-        }
+		if timeAndpdataSpans != empty {
+			pdataTraces = append(pdataTraces, timeAndpdataSpans)
+		}
 	}
 
-    print("organizing spans by time")
-    print("pdata traces at first size is ", len(pdataTraces))
+	print("organizing spans by time")
+	print("pdata traces at first size is ", len(pdataTraces))
 
 	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
@@ -616,7 +619,7 @@ func main() {
 		print("could not create gcs client")
 		os.Exit(0)
 	}
-    _ = client
+	_ = client
 
     println("batching spans")
     println("len pdata traces is ", len(pdataTraces))
@@ -641,7 +644,7 @@ func main() {
         println("end is ", end)
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
 		//computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
-        j += 1000
+		j += 1000
 	}
     println("done with everything")
 }
