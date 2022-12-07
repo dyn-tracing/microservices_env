@@ -520,6 +520,7 @@ func main() {
         _ = batch_name
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
 		//computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
+        j += 1000
 	}
     print("done with everything")
 }
