@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ProjectName = "dyn-tracing"
+	ProjectName = "dynamic-tracing"
 )
 
 type AliBabaSpan struct {
