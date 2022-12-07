@@ -152,6 +152,7 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 }
 
 func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
+    println("making pdata, alibabapsans len is ", len(aliBabaSpans))
 	root_span_index := -1
 
 	for ind, aliBabaSpan := range aliBabaSpans {
@@ -193,6 +194,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		span.SetTraceID(trace_id)
 		_ = err
 	}
+    print("now traces has x num resource spans ", traces.ResourceSpans().Len())
 
 	queue := make([]int, 0)
 	queue = append(queue, root_span_index)
@@ -206,6 +208,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 
 		// Checking for cyclicty in traces
 		if _, ok := visited[top]; ok {
+            println("found cycle")
 			return TimeWithTrace{}
 		} else {
 			visited[top] = true
@@ -230,9 +233,11 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	// Unreachibility thin'
 	for ind := range aliBabaSpans {
 		if _, ok := visited[ind]; !ok {
+            println("found unreachable spans")
 			return TimeWithTrace{}
 		}
 	}
+    print("at return time traces has resource spans ", traces.ResourceSpans().Len())
 	return TimeWithTrace{earliest_time, traces}
 }
 
@@ -246,6 +251,7 @@ func serviceNameToBucketName(service string, suffix string) string {
 }
 
 func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
+    print("sending batch to stoarge")
 	ctx := context.Background()
 	resourceNameToSpans := make(map[string]ptrace.Traces)
 	for time_with_trace := range traces {
@@ -265,6 +271,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
+    print("size of resourceNameToSpans is ", len(resourceNameToSpans))
 	for resource, spans := range resourceNameToSpans {
 		bucketName := serviceNameToBucketName(resource, BucketSuffix)
 		bkt := client.Bucket(bucketName)
@@ -462,6 +469,7 @@ func main() {
 	}
 
     print("organizing spans by time")
+    print("pdata traces at first size is ", len(pdataTraces))
 
 	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
@@ -478,6 +486,7 @@ func main() {
     _ = client
 
     print("batching spans")
+    print("len pdata traces is ", len(pdataTraces))
 	j := 0
 	for j < len(pdataTraces) {
 		start := j
