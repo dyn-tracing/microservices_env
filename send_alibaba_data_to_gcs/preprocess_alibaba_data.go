@@ -120,7 +120,6 @@ func getNewEntry(microservice_name_mapping map[string]string, animalNames []stri
             // sad, we've already tried this one
             continue
         } else {
-            println("possible ename is ", possibleName)
             return possibleName
         }
     }
@@ -134,6 +133,8 @@ func createAliBabaSpan(row []string, microservice_name_mapping map[string]string
     // if already exists in map, great
     if val, ok := microservice_name_mapping[row[4]]; ok {
         newSpan.upstream_microservice = val
+    } else if row[4] == MissingData {
+        newSpan.upstream_microservice = row[4]
     } else {
         // create new entry in map
         newEntry := getNewEntry(microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
@@ -143,6 +144,8 @@ func createAliBabaSpan(row []string, microservice_name_mapping map[string]string
     }
     if val, ok := microservice_name_mapping[row[6]]; ok {
         newSpan.downstream_microservice = val
+    } else if row[6] == MissingData {
+        newSpan.downstream_microservice = row[6]
     } else {
         // create new entry in map
         newEntry := getNewEntry(microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
@@ -157,7 +160,6 @@ func createAliBabaSpan(row []string, microservice_name_mapping map[string]string
 	newSpan.rpc_type = row[5]
 	newSpan.ali_interface = row[7]
 	newSpan.response_time, _ = strconv.Atoi(row[8])
-    println("span has um of ", newSpan.upstream_microservice, " and dm of ", newSpan.downstream_microservice)
 	return newSpan
 }
 
@@ -262,7 +264,7 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 				if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
 					return fmt.Errorf("failed creating bucket: %w", crErr)
 				} else {
-					print("got 409")
+					println("got 409")
 					return nil
 				}
 
@@ -275,7 +277,6 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 }
 
 func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
-	println("making pdata, alibabapsans len is ", len(aliBabaSpans))
 	root_span_index := -1
 
 	for ind, aliBabaSpan := range aliBabaSpans {
@@ -300,8 +301,8 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	earliest_time := aliBabaSpans[0].timestamp
 	upstreamMap := make(map[string][]int)
 
-	for ind, aliBabaSpan := range aliBabaSpans {
-		upstreamMap[aliBabaSpan.upstream_microservice] = append(upstreamMap[aliBabaSpan.upstream_microservice], ind)
+	for _, aliBabaSpan := range aliBabaSpans {
+		//upstreamMap[aliBabaSpan.upstream_microservice] = append(upstreamMap[aliBabaSpan.upstream_microservice], ind)
 
 		if aliBabaSpan.timestamp < earliest_time {
 			earliest_time = aliBabaSpan.timestamp
@@ -313,6 +314,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		}
 		batch := traces.ResourceSpans().AppendEmpty()
 		batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
+		batch.Resource().Attributes().PutStr("rpc.id", aliBabaSpan.rpc_id)
 		ils := batch.ScopeSpans().AppendEmpty()
 		span := ils.Spans().AppendEmpty()
 
@@ -321,7 +323,23 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		span.SetTraceID(trace_id)
 		_ = err
 	}
-	println("now traces has x num resource spans ", traces.ResourceSpans().Len())
+
+    root_span_index = -1
+    for i := 0; i<traces.ResourceSpans().Len(); i++ {
+        // get resource
+		if sn, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+            upstreamMap[sn.AsString()] = append(upstreamMap[sn.AsString()], i)
+
+        }
+		if rpc_id, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get("rpc.id"); ok {
+            if rpc_id.AsString() == "0.1" {
+                root_span_index = i
+            } else if rpc_id.AsString() == "0.1.1" && root_span_index == -1 {
+                root_span_index = i
+            }
+        }
+
+    }
 
 	queue := make([]int, 0)
 	queue = append(queue, root_span_index)
@@ -336,6 +354,8 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		// Checking for cyclicty in traces
 		if _, ok := visited[top]; ok {
 			println("found cycle")
+            println("trace id of cyclic trace is ", aliBabaSpans[top].trace_id)
+            println("num of spans is ", len(aliBabaSpans))
 			dm := aliBabaSpans[top].downstream_microservice
 			println("cycle found w dm of ", dm)
 			return TimeWithTrace{}
@@ -354,14 +374,13 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		raw_span_id := make([]byte, 8)
 		rand.Read(raw_span_id)
 		span_id := pcommon.SpanID(bytesTo8Bytes(raw_span_id))
+
 		traces.ResourceSpans().At(top).ScopeSpans().At(0).Spans().At(0).SetSpanID(span_id)
 
 		// log.Println("Adding: ")
 		for _, ele := range nextLevel {
 			// log.Print(ele, " ")
 			traces.ResourceSpans().At(ele).ScopeSpans().At(0).Spans().At(0).SetParentSpanID(span_id)
-            println("ele is ", ele)
-            println("overwriting the parent span id to ", traces.ResourceSpans().At(ele).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
 			queue = append(queue, ele)
 		}
 		// log.Println(".")
@@ -371,12 +390,9 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	for ind := 0; ind < traces.ResourceSpans().Len(); ind++ {
 		if _, ok := visited[ind]; !ok {
 			println("found unreachable spans")
-			println("ind: ", ind)
 			return TimeWithTrace{}
 		}
 	}
-    println("before return: parent span id is ", traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
-	log.Println("at return time traces has resource spans ", traces.ResourceSpans().Len())
 	return TimeWithTrace{earliest_time, traces}
 }
 
@@ -390,12 +406,10 @@ func serviceNameToBucketName(service string, suffix string) string {
 }
 
 func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
-    println("sending batch to stoarge")
 	ctx := context.Background()
 	resourceNameToSpans := make(map[string]ptrace.Traces)
 	for time_with_trace := range traces {
 		span := traces[time_with_trace].trace
-        println("size of resource spans is ", span.ResourceSpans().Len())
 		for i := 0; i < span.ResourceSpans().Len(); i++ {
 			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
 				if _, ok := resourceNameToSpans[sn.AsString()]; ok {
@@ -413,10 +427,8 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
-    println("size of resourceNameToSpans is ", len(resourceNameToSpans))
 	for resource, spans := range resourceNameToSpans {
 		bucketName := serviceNameToBucketName(resource, BucketSuffix)
-        println("bucket to write to is ", bucketName)
 		bkt := client.Bucket(bucketName)
 
 		// Check if bucket exists or not, create one if needed
@@ -424,7 +436,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 		if err == storage.ErrBucketNotExist {
 			err = bkt.Create(ctx, ProjectName, nil)
 			if err != nil {
-				print("Could not create bucket ", bucketName)
+				println("Could not create bucket ", bucketName)
                 fmt.Errorf("failed creating the gRPC client to Storage: %w", err)
                 return err
 			}
@@ -545,7 +557,6 @@ func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name str
 		for i := 0; i < trace.trace.ResourceSpans().Len(); i++ {
 			span := trace.trace.ResourceSpans().At(i).ScopeSpans().At(0).Spans().At(0)
 			parent := span.ParentSpanID().HexString()
-            println("parent is ", parent)
 			spanID := span.SpanID().HexString()
 			if sn, ok := trace.trace.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
 				sp = append(sp, spanStr{
@@ -597,7 +608,7 @@ func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name str
 
 func main() {
 	if len(os.Args) != 2 {
-		print("usage: ./preprocess_alibaba_data filename")
+		println("usage: ./preprocess_alibaba_data filename")
 		os.Exit(0)
 	}
 
@@ -613,13 +624,11 @@ func main() {
 		timeAndpdataSpans := makePData(aliBabaSpans)
 		if timeAndpdataSpans != empty {
 			pdataTraces = append(pdataTraces, timeAndpdataSpans)
-            println("0: parent span id is ", timeAndpdataSpans.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
-            println("1: parent span id is ", timeAndpdataSpans.trace.ResourceSpans().At(1).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
 		}
 	}
 
-	print("organizing spans by time")
-	print("pdata traces at first size is ", len(pdataTraces))
+	println("organizing spans by time")
+	println("pdata traces at first size is ", len(pdataTraces))
 
 	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
@@ -652,7 +661,6 @@ func main() {
 			strconv.Itoa(pdataTraces[start].timestamp) + "-" +
             strconv.Itoa(pdataTraces[end-1].timestamp)
         _ = batch_name
-        println("batch name is ", batch_name)
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
 		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
 		j += 1000
