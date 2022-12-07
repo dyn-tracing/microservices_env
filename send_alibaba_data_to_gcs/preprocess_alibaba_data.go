@@ -67,11 +67,7 @@ func importAliBabaData(filename string, filenum int) map[string][]AliBabaSpan {
 			log.Fatal(err)
 		}
 		newSpan := createAliBabaSpan(rec)
-		if _, ok := mapping[newSpan.trace_id]; ok {
-			mapping[newSpan.trace_id] = append(mapping[newSpan.trace_id], newSpan)
-		} else {
-			mapping[newSpan.trace_id] = []AliBabaSpan{newSpan}
-		}
+		mapping[newSpan.trace_id] = append(mapping[newSpan.trace_id], newSpan)
 	}
 	return mapping
 }
@@ -118,11 +114,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	upstreamMap := make(map[string][]int)
 
 	for ind, aliBabaSpan := range aliBabaSpans {
-		if _, ok := upstreamMap[aliBabaSpan.upstream_microservice]; ok {
-			upstreamMap[aliBabaSpan.upstream_microservice] = append(upstreamMap[aliBabaSpan.upstream_microservice], ind)
-		} else {
-			upstreamMap[aliBabaSpan.upstream_microservice] = []int{ind}
-		}
+		upstreamMap[aliBabaSpan.upstream_microservice] = append(upstreamMap[aliBabaSpan.upstream_microservice], ind)
 
 		if aliBabaSpan.timestamp < earliest_time {
 			earliest_time = aliBabaSpan.timestamp
