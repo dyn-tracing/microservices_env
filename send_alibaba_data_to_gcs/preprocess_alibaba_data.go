@@ -355,12 +355,13 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		rand.Read(raw_span_id)
 		span_id := pcommon.SpanID(bytesTo8Bytes(raw_span_id))
 		traces.ResourceSpans().At(top).ScopeSpans().At(0).Spans().At(0).SetSpanID(span_id)
-		traces.ResourceSpans().At(top).ScopeSpans().At(0).Spans().At(0).SetParentSpanID(pcommon.SpanID([8]byte{0, 0, 0, 0, 0, 0, 0, 0}))
 
 		// log.Println("Adding: ")
 		for _, ele := range nextLevel {
 			// log.Print(ele, " ")
 			traces.ResourceSpans().At(ele).ScopeSpans().At(0).Spans().At(0).SetParentSpanID(span_id)
+            println("ele is ", ele)
+            println("overwriting the parent span id to ", traces.ResourceSpans().At(ele).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
 			queue = append(queue, ele)
 		}
 		// log.Println(".")
@@ -374,6 +375,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			return TimeWithTrace{}
 		}
 	}
+    println("before return: parent span id is ", traces.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
 	log.Println("at return time traces has resource spans ", traces.ResourceSpans().Len())
 	return TimeWithTrace{earliest_time, traces}
 }
@@ -543,6 +545,7 @@ func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name str
 		for i := 0; i < trace.trace.ResourceSpans().Len(); i++ {
 			span := trace.trace.ResourceSpans().At(i).ScopeSpans().At(0).Spans().At(0)
 			parent := span.ParentSpanID().HexString()
+            println("parent is ", parent)
 			spanID := span.SpanID().HexString()
 			if sn, ok := trace.trace.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
 				sp = append(sp, spanStr{
@@ -610,6 +613,8 @@ func main() {
 		timeAndpdataSpans := makePData(aliBabaSpans)
 		if timeAndpdataSpans != empty {
 			pdataTraces = append(pdataTraces, timeAndpdataSpans)
+            println("0: parent span id is ", timeAndpdataSpans.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
+            println("1: parent span id is ", timeAndpdataSpans.trace.ResourceSpans().At(1).ScopeSpans().At(0).Spans().At(0).ParentSpanID().HexString())
 		}
 	}
 
