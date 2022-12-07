@@ -28,7 +28,7 @@ const (
 	ProjectName = "dynamic-tracing"
     TraceBucket = "dyntraces"
     PrimeNumber = 97
-    BucketSuffix = "-snicket-alibaba"
+    BucketSuffix = "-snicket-alibaba-small"
     MicroserviceNameMapping = "names.csv"
     AnimalJSON = "animals.csv"
     ColorsJSON = "color_names.csv"
@@ -278,33 +278,11 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 }
 
 func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
-	root_span_index := -1
-
-	for ind, aliBabaSpan := range aliBabaSpans {
-		if aliBabaSpan.rpc_id == "0.1" {
-			root_span_index = ind
-		}
-	}
-
-	if root_span_index == -1 {
-		for ind, aliBabaSpan := range aliBabaSpans {
-			if aliBabaSpan.rpc_id == "0.1.1" {
-				root_span_index = ind
-			}
-		}
-	}
-
-	if root_span_index == -1 {
-		return TimeWithTrace{}
-	}
-
 	traces := ptrace.NewTraces()
 	earliest_time := aliBabaSpans[0].timestamp
 	upstreamMap := make(map[string][]int)
 
 	for _, aliBabaSpan := range aliBabaSpans {
-		//upstreamMap[aliBabaSpan.upstream_microservice] = append(upstreamMap[aliBabaSpan.upstream_microservice], ind)
-
 		if aliBabaSpan.timestamp < earliest_time {
 			earliest_time = aliBabaSpan.timestamp
 		}
@@ -314,7 +292,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			continue
 		}
 		batch := traces.ResourceSpans().AppendEmpty()
-		batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.upstream_microservice)
+		batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.downstream_microservice)
 		batch.Resource().Attributes().PutStr("rpc.id", aliBabaSpan.rpc_id)
 		ils := batch.ScopeSpans().AppendEmpty()
 		span := ils.Spans().AppendEmpty()
@@ -325,7 +303,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		_ = err
 	}
 
-    root_span_index = -1
+    root_span_index := -1
     for i := 0; i<traces.ResourceSpans().Len(); i++ {
         // get resource
 		if sn, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
@@ -340,6 +318,9 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
             }
         }
 
+    }
+    if root_span_index == -1 {
+		return TimeWithTrace{}
     }
 
 	queue := make([]int, 0)
