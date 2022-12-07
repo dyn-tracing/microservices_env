@@ -19,6 +19,10 @@ import (
 	conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
 )
 
+const (
+	ProjectName = "dyn-tracing"
+)
+
 type AliBabaSpan struct {
 	timestamp               int
 	trace_id                string
@@ -205,7 +209,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 		// Check if bucket exists or not, create one if needed
 		_, err := bkt.Attrs(ctx)
 		if err == storage.ErrBucketNotExist {
-			err = bkt.Create(ctx, "dyn-tracing", nil)
+			err = bkt.Create(ctx, ProjectName, nil)
 			if err != nil {
 				print("Could not create bucket ", bucketName)
 			}
