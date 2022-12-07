@@ -109,13 +109,13 @@ func getColorNames() []string{
     return colors
 }
 
-func getNewEntry(microservice_name_mapping *map[string]string, animalNames []string, colorNames []string, animal_color_to_hash *map[string]string) string {
+func getNewEntry(microservice_name_mapping map[string]string, animalNames []string, colorNames []string, animal_color_to_hash map[string]string) string {
     found := false
     for !found {
         randomAnimalIndex := mathrand.Intn(len(animalNames))
         randomColorIndex := mathrand.Intn(len(colorNames))
         possibleName := animalNames[randomAnimalIndex] + colorNames[randomColorIndex]
-        if val, ok := *animal_color_to_hash[possibleName]; ok {
+        if _, ok := animal_color_to_hash[possibleName]; ok {
             // sad, we've already tried this one
             continue
         } else {
@@ -125,7 +125,8 @@ func getNewEntry(microservice_name_mapping *map[string]string, animalNames []str
     return ""
 }
 
-func createAliBabaSpan(row []string, microservice_name_mapping *map[string]string, animalNames []string, colorNames []string, animalColorToHashName *map[string]string) AliBabaSpan {
+func createAliBabaSpan(row []string, microservice_name_mapping map[string]string, animalNames []string, colorNames []string, animalColorToHashName map[string]string) AliBabaSpan {
+	var newSpan AliBabaSpan
     // if already exists in map, great
     if val, ok := microservice_name_mapping[row[4]]; ok {
         newSpan.upstream_microservice = val
@@ -143,7 +144,6 @@ func createAliBabaSpan(row []string, microservice_name_mapping *map[string]strin
         microservice_name_mapping[row[6]] = newEntry
         animalColorToHashName[newEntry] = row[6]
     }
-	var newSpan AliBabaSpan
 	newSpan.trace_id = row[1]
 	newSpan.timestamp, _ = strconv.Atoi(row[2])
 	newSpan.rpc_id = row[3]
@@ -153,9 +153,9 @@ func createAliBabaSpan(row []string, microservice_name_mapping *map[string]strin
 	return newSpan
 }
 
-func importNameMapping(MicroserviceNameMapping) map[string]string {
-    info, err := os.Stat(MicroserviceNameMapping)
-    if err == os.IsNotExist(err) {
+func importNameMapping() map[string]string {
+    _, err := os.Stat(MicroserviceNameMapping)
+    if os.IsNotExist(err) {
         return make(map[string]string)
     }
 	f, err := os.Open(MicroserviceNameMapping)
@@ -167,7 +167,7 @@ func importNameMapping(MicroserviceNameMapping) map[string]string {
 	mapping := make(map[string]string)
 	csvReader := csv.NewReader(f)
 	for {
-		rec, err := csvReader.Read()
+		row, err := csvReader.Read()
 		if err == io.EOF {
 			break
 		}
@@ -191,7 +191,7 @@ func importAliBabaData(filename string, filenum int, microservice_name_mapping m
     colorNames := getColorNames()
 
     // create mapping from fake name to real hash
-    animalColorToHashName = make([string]string)
+    animalColorToHashName := make(map[string]string)
     for hash, color := range(microservice_name_mapping) {
         animalColorToHashName[color] = hash
     }
@@ -592,8 +592,8 @@ func main() {
 	filename := os.Args[1]
 
     // determine if name mapping file exists
-    microservice_hash_to_name = importNameMapping()
-	traceIDToAliBabaSpans := importAliBabaData(filename, 1)
+    microservice_hash_to_name := importNameMapping()
+	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
 	pdataTraces := make([]TimeWithTrace, 0)
 	empty := TimeWithTrace{}
 	for _, aliBabaSpans := range traceIDToAliBabaSpans {
