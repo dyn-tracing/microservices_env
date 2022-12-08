@@ -25,10 +25,10 @@ import (
 )
 
 const (
-	ProjectName             = "dynamic-tracing"
+	ProjectName             = "cost-project-1"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-snicket-alibaba-small"
+	BucketSuffix            = "-snicket-alibaba-new"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -219,6 +219,8 @@ func importAliBabaData(filename string, filenum int, microservice_name_mapping m
 		newSpan := createAliBabaSpan(rec, microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
 		mapping[newSpan.trace_id] = append(mapping[newSpan.trace_id], newSpan)
 	}
+
+    // Write out new microservice name mapping
 	return mapping
 }
 
@@ -414,16 +416,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 		bkt := client.Bucket(bucketName)
 
 		// Check if bucket exists or not, create one if needed
-		_, err := bkt.Attrs(ctx)
-		if err == storage.ErrBucketNotExist {
-			err = bkt.Create(ctx, ProjectName, nil)
-			if err != nil {
-				println("Could not create bucket ", bucketName)
-				fmt.Errorf("failed creating the gRPC client to Storage: %w", err)
-				return err
-			}
-		}
-
+        spanBucketExists(ctx, resource, true, client)
 		buffer, err := tracesMarshaler.MarshalTraces(spans)
 		if err != nil {
 			print("could not marshal traces")
