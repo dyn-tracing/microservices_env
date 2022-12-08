@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"errors"
+    "time"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -302,6 +303,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	traces := ptrace.NewTraces()
 	earliest_time := aliBabaSpans[0].timestamp
 	upstreamMap := make(map[string][]int)
+    statusCode := []string{"200", "400", "402", "404", "302", "500", "501", "540"}
 
 	for _, aliBabaSpan := range aliBabaSpans {
 		if aliBabaSpan.timestamp < earliest_time {
@@ -318,6 +320,10 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		batch.Resource().Attributes().PutStr("rpc.id", aliBabaSpan.rpc_id)
 		ils := batch.ScopeSpans().AppendEmpty()
 		span := ils.Spans().AppendEmpty()
+        span.SetStartTimestamp(pcommon.NewTimestampFromTime(time.Unix(int64(aliBabaSpan.timestamp), 0)))
+		randomStatus := mathrand.Intn(len(statusCode))
+        span.Attributes().PutStr("http.status_code", statusCode[randomStatus])
+        span.SetEndTimestamp(pcommon.NewTimestampFromTime(time.Unix(int64(aliBabaSpan.timestamp), 0)))
 
 		trace_id_bytes, err := hex.DecodeString(aliBabaSpan.trace_id)
 		trace_id := pcommon.TraceID(bytesTo16Bytes(trace_id_bytes))
@@ -415,6 +421,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 		span := traces[time_with_trace].trace
 		for i := 0; i < span.ResourceSpans().Len(); i++ {
 			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+                println("considering span of resource ", sn.AsString())
 				if _, ok := resourceNameToSpans[sn.AsString()]; ok {
 					span.ResourceSpans().At(i).CopyTo(resourceNameToSpans[sn.AsString()].ResourceSpans().AppendEmpty())
 				} else {
@@ -431,6 +438,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
 	for resource, spans := range resourceNameToSpans {
+        println("sending resource ", resource)
 		bucketName := serviceNameToBucketName(resource, BucketSuffix)
 		bkt := client.Bucket(bucketName)
 
