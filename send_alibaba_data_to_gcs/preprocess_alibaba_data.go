@@ -28,7 +28,7 @@ const (
 	ProjectName             = "cost-project-1"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-snicket-alibaba-new"
+	BucketSuffix            = "-snicket-alibaba-new-small"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -207,6 +207,7 @@ func importAliBabaData(filename string, filenum int, microservice_name_mapping m
 		animalColorToHashName[color] = hash
 	}
 
+    first := true
 	csvReader := csv.NewReader(f)
 	for {
 		rec, err := csvReader.Read()
@@ -216,11 +217,29 @@ func importAliBabaData(filename string, filenum int, microservice_name_mapping m
 		if err != nil {
 			log.Fatal(err)
 		}
+        if first {
+            // ignore first header line
+            first = false
+            continue
+        }
 		newSpan := createAliBabaSpan(rec, microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
 		mapping[newSpan.trace_id] = append(mapping[newSpan.trace_id], newSpan)
 	}
-
     // Write out new microservice name mapping
+    mapping_file, err := os.Create(MicroserviceNameMapping)
+    defer mapping_file.Close()
+    if err != nil {
+        log.Fatalln("failed to open file", err)
+    }
+    w := csv.NewWriter(mapping_file)
+    defer w.Flush()
+    for service, pseudonym := range(microservice_name_mapping) {
+        to_write := []string{service, pseudonym}
+        if err := w.Write(to_write); err != nil {
+            log.Fatalln("error writing record to file", err)
+        }
+    }
+
 	return mapping
 }
 
