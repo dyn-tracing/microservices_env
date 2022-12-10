@@ -29,7 +29,7 @@ const (
 	ProjectName             = "cost-project-1"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-snicket-alibaba-new-small"
+	BucketSuffix            = "-alibaba-and-forty-thieves"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -224,7 +224,9 @@ func importAliBabaData(filename string, filenum int, microservice_name_mapping m
             continue
         }
 		newSpan := createAliBabaSpan(rec, microservice_name_mapping, animalNames, colorNames, animalColorToHashName)
-		mapping[newSpan.trace_id] = append(mapping[newSpan.trace_id], newSpan)
+        if newSpan.rpc_id != "0" {
+		    mapping[newSpan.trace_id] = append(mapping[newSpan.trace_id], newSpan)
+        }
 	}
     // Write out new microservice name mapping
     mapping_file, err := os.Create(MicroserviceNameMapping)
@@ -299,6 +301,93 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 	return err
 }
 
+func isCyclic2(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, visited map[int]bool, recStack []bool) bool {
+
+    if visited[v] == false {
+        println("visiting: ", v)
+
+        // Do not visit or recstack if this is a self loop
+        if aliBabaSpans[v].downstream_microservice != aliBabaSpans[v].upstream_microservice {
+            return false;
+        }
+        visited[v] = true;
+        recStack[v] = true;
+
+        for _, child := range upstreamMap[aliBabaSpans[v].downstream_microservice] {
+            if visited[child] == false && isCyclic2(aliBabaSpans, child, upstreamMap, visited, recStack) {
+                println("returning true on ", child)
+                return true
+            } else if recStack[child] {
+                println("returning true on ", child)
+                return true
+            }
+        }
+    }
+    recStack[v] = false;
+    return false;
+}
+
+func isCyclic(aliBabaSpans []AliBabaSpan, root_ind int, upstreamMap map[string][]int) bool {
+    println("guess what it's the upstream mpa")
+    for i, j := range upstreamMap {
+        println("upstream map key: ", i, "val: ")
+        for _, k := range j {
+            print(k)
+        }
+        println("")
+    }
+
+
+	stack := make([]int, 0)
+	stack = append(stack, root_ind)
+	visited := make(map[int]bool)
+
+    for {
+        if len(stack) < 1 {
+            break
+        }
+        println("visited: ")
+        for i,_ := range visited {
+            print(i, "  ")
+        }
+        println("")
+
+        println("stack: ")
+        for i := 0; i < len(stack); i++ {
+            print(stack[i], "  ")
+        }
+        println("")
+
+        top := stack[len(stack)-1]
+        visited[top] = true
+        stack = stack[:len(stack)-1]
+        println("top is ", top)
+        if aliBabaSpans[top].downstream_microservice == aliBabaSpans[top].upstream_microservice {
+            println("continuing bc it is the same")
+            continue
+        }
+        println("stack after removal: ")
+        for i := 0; i < len(stack); i++ {
+            print(stack[i], "  ")
+        }
+        println("")
+
+        println("alibabaspans top is ", aliBabaSpans[top].downstream_microservice)
+
+        for _, child := range upstreamMap[aliBabaSpans[top].downstream_microservice] {
+            println("my child is ", child)
+            if visited[child] == false {
+                stack = append(stack, child)
+            }
+            if visited[child] == true && aliBabaSpans[child].upstream_microservice != MissingData {
+                println("index ", child, " already was visited")
+                return true
+            }
+        }
+    }
+    return false
+}
+
 func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	traces := ptrace.NewTraces()
 	earliest_time := aliBabaSpans[0].timestamp
@@ -310,13 +399,10 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			earliest_time = aliBabaSpan.timestamp
 		}
 
-		// ignore user calls
-		if aliBabaSpan.rpc_id == "0" {
-			continue
-		}
 		batch := traces.ResourceSpans().AppendEmpty()
 		batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.downstream_microservice) // what if dm is missing ?
 		batch.Resource().Attributes().PutStr("upstream.name", aliBabaSpan.upstream_microservice)  // what if dm is missing ?
+        println("upstream is ", aliBabaSpan.upstream_microservice)
 		batch.Resource().Attributes().PutStr("rpc.id", aliBabaSpan.rpc_id)
 		ils := batch.ScopeSpans().AppendEmpty()
 		span := ils.Spans().AppendEmpty()
@@ -335,6 +421,11 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	for i := 0; i < traces.ResourceSpans().Len(); i++ {
 		if sn, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get("upstream.name"); ok {
 			upstreamMap[sn.AsString()] = append(upstreamMap[sn.AsString()], i)
+            println("sn: ", sn.AsString())
+            for _, k := range upstreamMap[sn.AsString()] {
+                print(k, " ")
+            }
+            println()
 		}
 
 		if rpc_id, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get("rpc.id"); ok {
@@ -345,6 +436,15 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			}
 		}
 	}
+    println("it's after creating the upstream mpa")
+    for i, j := range upstreamMap {
+        println("upstream map key: ", i)
+        print("val: ")
+        for _, k := range j {
+            print(k)
+        }
+        println("")
+    }
 
 	if root_span_index == -1 {
 		return TimeWithTrace{}
@@ -354,23 +454,25 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	queue = append(queue, root_span_index)
 	visited := make(map[int]bool)
 
+    cyclic_visited := make(map[int]bool)
+    recStack := make([]bool, len(aliBabaSpans))
+    for i := 0; i<len(aliBabaSpans); i++ {
+        cyclic_visited[i] = false;
+        recStack[i] = false;
+    }
+    if (isCyclic2(aliBabaSpans, root_span_index, upstreamMap, cyclic_visited, recStack)) {
+        // :(
+        println("unfortuantely i am cyclic")
+        return TimeWithTrace{}
+    }
+
 	for {
 		if len(queue) < 1 {
 			break
 		}
 		top := queue[0]
 
-		// Checking for cyclicty in traces
-		if _, ok := visited[top]; ok {
-			println("found cycle")
-			println("trace id of cyclic trace is ", aliBabaSpans[top].trace_id)
-			println("num of spans is ", len(aliBabaSpans))
-			dm := aliBabaSpans[top].downstream_microservice
-			println("cycle found w dm of ", dm)
-			return TimeWithTrace{}
-		} else {
-			visited[top] = true
-		}
+		visited[top] = true
 
 		queue = queue[1:]
 		dm := aliBabaSpans[top].downstream_microservice
@@ -398,7 +500,12 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	// Unreachibility thin'
 	for ind := 0; ind < traces.ResourceSpans().Len(); ind++ {
 		if _, ok := visited[ind]; !ok {
-			println("found unreachable spans")
+            println("trace id of unreachable trace is : ", aliBabaSpans[root_span_index].trace_id)
+            /*
+		    if sn, ok := traces.ResourceSpans().At(ind).Resource().Attributes().Get("rpc.id"); ok {
+                println("unreachable has rpc id of ", sn.AsString())
+            }
+            */
 			return TimeWithTrace{}
 		}
 	}
@@ -421,7 +528,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 		span := traces[time_with_trace].trace
 		for i := 0; i < span.ResourceSpans().Len(); i++ {
 			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
-                println("considering span of resource ", sn.AsString())
+                //println("considering span of resource ", sn.AsString())
 				if _, ok := resourceNameToSpans[sn.AsString()]; ok {
 					span.ResourceSpans().At(i).CopyTo(resourceNameToSpans[sn.AsString()].ResourceSpans().AppendEmpty())
 				} else {
@@ -438,7 +545,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
 	for resource, spans := range resourceNameToSpans {
-        println("sending resource ", resource)
+        //println("sending resource ", resource)
 		bucketName := serviceNameToBucketName(resource, BucketSuffix)
 		bkt := client.Bucket(bucketName)
 
@@ -621,14 +728,21 @@ func main() {
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
 	pdataTraces := make([]TimeWithTrace, 0)
 	empty := TimeWithTrace{}
+    totalTraces := 0
+    exemptedTraces := 0
 	for _, aliBabaSpans := range traceIDToAliBabaSpans {
 		// We need to create pdata spans
 		timeAndpdataSpans := makePData(aliBabaSpans)
+        totalTraces += 1
 		if timeAndpdataSpans != empty {
 			pdataTraces = append(pdataTraces, timeAndpdataSpans)
-		}
+		} else {
+            exemptedTraces += 1
+        }
 	}
 
+    println("total traces: ", totalTraces)
+    println("exempted traces: ", exemptedTraces)
 	println("organizing spans by time")
 	println("pdata traces at first size is ", len(pdataTraces))
 
