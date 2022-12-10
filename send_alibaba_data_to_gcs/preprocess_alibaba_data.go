@@ -29,7 +29,7 @@ const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-test-querying"
+	BucketSuffix            = "-test-script"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -57,6 +57,12 @@ type spanStr struct {
 type TimeWithTrace struct {
 	timestamp int
 	trace     ptrace.Traces
+}
+
+type Exempted struct {
+    total int
+    exemptedCycle int
+    exemptedFrag int
 }
 
 // https://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
@@ -315,10 +321,8 @@ func isCyclic2(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, 
                 continue
             }
             if visited[child] == false && isCyclic2(aliBabaSpans, child, upstreamMap, visited, recStack) {
-                println("returning true on ", child)
                 return true
             } else if recStack[child] {
-                println("recStack: returning true on ", child)
                 return true
             }
         }
@@ -449,7 +453,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
     */
 
 	if root_span_index == -1 {
-        println("can't find root")
 		return TimeWithTrace{}
 	}
 
@@ -464,11 +467,8 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
         recStack[i] = false;
     }
     if (isCyclic2(aliBabaSpans, root_span_index, upstreamMap, cyclic_visited, recStack)) {
-        // :(
-        println("unfortuantely i am cyclic")
+        // :( cyclic
         return TimeWithTrace{-1, ptrace.NewTraces()}
-    } else {
-        println("am not cyclic")
     }
 
 	for {
@@ -525,7 +525,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	// Unreachibility thin'
 	for ind := 0; ind < traces.ResourceSpans().Len(); ind++ {
 		if _, ok := visited[ind]; !ok {
-            println("trace id of unreachable trace is : ", aliBabaSpans[root_span_index].trace_id)
+            //println("trace id of unreachable trace is : ", aliBabaSpans[root_span_index].trace_id)
             /*
 		    if sn, ok := traces.ResourceSpans().At(ind).Resource().Attributes().Get("rpc.id"); ok {
                 println("unreachable has rpc id of ", sn.AsString())
@@ -574,9 +574,7 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
         if resource_final == MissingData {
             resource_final = "MissingService"
         }
-        println("sending resource ", resource_final)
 		bucketName := serviceNameToBucketName(resource_final, BucketSuffix)
-        println("bucket name is ", bucketName)
 		bkt := client.Bucket(bucketName)
 
 		// Check if bucket exists or not, create one if needed
@@ -749,14 +747,7 @@ func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name str
 	return nil
 }
 
-func main() {
-	if len(os.Args) != 2 {
-		println("usage: ./preprocess_alibaba_data filename")
-		os.Exit(0)
-	}
-
-	filename := os.Args[1]
-
+func process_file(filename string) Exempted {
 	// determine if name mapping file exists
 	microservice_hash_to_name := importNameMapping()
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
@@ -781,8 +772,7 @@ func main() {
     println("total traces: ", totalTraces)
     println("exempted traces (cyclic): ", cyclicExemptedTraces)
     println("exempted traces (frag): ", fragExemptedTraces)
-	println("organizing spans by time")
-	println("pdata traces at first size is ", len(pdataTraces))
+    to_return := Exempted{totalTraces, cyclicExemptedTraces, fragExemptedTraces}
 
 	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
@@ -800,7 +790,6 @@ func main() {
 
 	j := 0
 	for j < len(pdataTraces) {
-		println("j is ", j)
 		start := j
 		end := start + BatchSize
 		if end >= len(pdataTraces) {
@@ -820,5 +809,33 @@ func main() {
 		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
 		j += BatchSize
 	}
-	println("done with everything")
+	println("done with file: ", filename)
+    return to_return
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		println("usage: ./preprocess_alibaba_data filename")
+		os.Exit(0)
+	}
+
+	filename := os.Args[1]
+    exempted_total := Exempted{0,0,0}
+    if filename == "MSCallGraph" {
+        for i:=1; i<=2; i++ {
+            new_file_name := filename+"_"+strconv.Itoa(i)+".csv"
+            println("processing file: ", new_file_name)
+            exempted_result := process_file(new_file_name)
+            exempted_total.total += exempted_result.total
+            exempted_total.exemptedCycle += exempted_result.exemptedCycle
+            exempted_total.exemptedFrag += exempted_result.exemptedFrag
+        }
+        println("TOTAL:")
+        println("total traces: ", exempted_total.total)
+        println("total exempted for cycles: ", exempted_total.exemptedCycle)
+        println("total exemptedfor frag: ", exempted_total.exemptedFrag)
+    } else {
+        process_file(filename)
+    }
+
 }
