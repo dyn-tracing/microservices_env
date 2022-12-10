@@ -29,7 +29,7 @@ const (
 	ProjectName             = "cost-project-1"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-alibaba-and-forty-thieves"
+	BucketSuffix            = "-alibaba-test-cyclicity"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -303,23 +303,28 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 
 func isCyclic2(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, visited map[int]bool, recStack []bool) bool {
 
-    if visited[v] == false {
-        println("visiting: ", v)
+    println("considering trace ID: ", aliBabaSpans[v].trace_id)
 
-        // Do not visit or recstack if this is a self loop
-        if aliBabaSpans[v].downstream_microservice != aliBabaSpans[v].upstream_microservice {
-            return false;
-        }
+    if visited[v] == false {
+        println("setting to visited for : ", v)
         visited[v] = true;
         recStack[v] = true;
+        // Do not visit or recstack if this is a self loop
+        if aliBabaSpans[v].downstream_microservice == aliBabaSpans[v].upstream_microservice {
+            println("returning false because I encountered a self loop")
+            return false;
+        }
 
         for _, child := range upstreamMap[aliBabaSpans[v].downstream_microservice] {
-            if visited[child] == false && isCyclic2(aliBabaSpans, child, upstreamMap, visited, recStack) {
-                println("returning true on ", child)
-                return true
-            } else if recStack[child] {
-                println("returning true on ", child)
-                return true
+            if aliBabaSpans[child].downstream_microservice != MissingData &&
+              aliBabaSpans[child].downstream_microservice != aliBabaSpans[child].upstream_microservice {
+              println("exploring child: ", child)
+                if visited[child] == false &&
+                    isCyclic2(aliBabaSpans, child, upstreamMap, visited, recStack) {
+                    return true
+                } else if recStack[child] {
+                    return true
+                }
             }
         }
     }
@@ -328,16 +333,6 @@ func isCyclic2(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, 
 }
 
 func isCyclic(aliBabaSpans []AliBabaSpan, root_ind int, upstreamMap map[string][]int) bool {
-    println("guess what it's the upstream mpa")
-    for i, j := range upstreamMap {
-        println("upstream map key: ", i, "val: ")
-        for _, k := range j {
-            print(k)
-        }
-        println("")
-    }
-
-
 	stack := make([]int, 0)
 	stack = append(stack, root_ind)
 	visited := make(map[int]bool)
@@ -346,41 +341,23 @@ func isCyclic(aliBabaSpans []AliBabaSpan, root_ind int, upstreamMap map[string][
         if len(stack) < 1 {
             break
         }
-        println("visited: ")
-        for i,_ := range visited {
-            print(i, "  ")
-        }
-        println("")
-
-        println("stack: ")
-        for i := 0; i < len(stack); i++ {
-            print(stack[i], "  ")
-        }
-        println("")
 
         top := stack[len(stack)-1]
         visited[top] = true
         stack = stack[:len(stack)-1]
-        println("top is ", top)
         if aliBabaSpans[top].downstream_microservice == aliBabaSpans[top].upstream_microservice {
-            println("continuing bc it is the same")
             continue
         }
-        println("stack after removal: ")
         for i := 0; i < len(stack); i++ {
             print(stack[i], "  ")
         }
-        println("")
 
-        println("alibabaspans top is ", aliBabaSpans[top].downstream_microservice)
 
         for _, child := range upstreamMap[aliBabaSpans[top].downstream_microservice] {
-            println("my child is ", child)
             if visited[child] == false {
                 stack = append(stack, child)
             }
             if visited[child] == true && aliBabaSpans[child].upstream_microservice != MissingData {
-                println("index ", child, " already was visited")
                 return true
             }
         }
@@ -402,7 +379,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		batch := traces.ResourceSpans().AppendEmpty()
 		batch.Resource().Attributes().PutStr("service.name", aliBabaSpan.downstream_microservice) // what if dm is missing ?
 		batch.Resource().Attributes().PutStr("upstream.name", aliBabaSpan.upstream_microservice)  // what if dm is missing ?
-        println("upstream is ", aliBabaSpan.upstream_microservice)
 		batch.Resource().Attributes().PutStr("rpc.id", aliBabaSpan.rpc_id)
 		ils := batch.ScopeSpans().AppendEmpty()
 		span := ils.Spans().AppendEmpty()
@@ -420,12 +396,12 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	root_span_index := -1
 	for i := 0; i < traces.ResourceSpans().Len(); i++ {
 		if sn, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get("upstream.name"); ok {
-			upstreamMap[sn.AsString()] = append(upstreamMap[sn.AsString()], i)
-            println("sn: ", sn.AsString())
-            for _, k := range upstreamMap[sn.AsString()] {
-                print(k, " ")
+            // only add it to upstream microservice map if it's a real service
+		    if dm, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get("service.name"); ok {
+                if dm.AsString() != MissingData {
+                    upstreamMap[sn.AsString()] = append(upstreamMap[sn.AsString()], i)
+                }
             }
-            println()
 		}
 
 		if rpc_id, ok := traces.ResourceSpans().At(i).Resource().Attributes().Get("rpc.id"); ok {
@@ -436,15 +412,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			}
 		}
 	}
-    println("it's after creating the upstream mpa")
-    for i, j := range upstreamMap {
-        println("upstream map key: ", i)
-        print("val: ")
-        for _, k := range j {
-            print(k)
-        }
-        println("")
-    }
 
 	if root_span_index == -1 {
 		return TimeWithTrace{}
@@ -500,13 +467,16 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	// Unreachibility thin'
 	for ind := 0; ind < traces.ResourceSpans().Len(); ind++ {
 		if _, ok := visited[ind]; !ok {
+            println("wasn't able to reach: ", ind)
             println("trace id of unreachable trace is : ", aliBabaSpans[root_span_index].trace_id)
             /*
 		    if sn, ok := traces.ResourceSpans().At(ind).Resource().Attributes().Get("rpc.id"); ok {
                 println("unreachable has rpc id of ", sn.AsString())
             }
             */
-			return TimeWithTrace{}
+            if aliBabaSpans[ind].downstream_microservice != MissingData {
+			    return TimeWithTrace{}
+            }
 		}
 	}
 	return TimeWithTrace{earliest_time, traces}
@@ -730,7 +700,12 @@ func main() {
 	empty := TimeWithTrace{}
     totalTraces := 0
     exemptedTraces := 0
+    i := 0
 	for _, aliBabaSpans := range traceIDToAliBabaSpans {
+        i += 1
+        if i % 1000 == 0 {
+            println("i: ", i)
+        }
 		// We need to create pdata spans
 		timeAndpdataSpans := makePData(aliBabaSpans)
         totalTraces += 1
@@ -774,12 +749,14 @@ func main() {
 		if len(int_hash) == 1 {
 			int_hash = "0" + int_hash
 		}
+        /*
 		batch_name := int_hash[0:2] + "-" +
 			strconv.Itoa(pdataTraces[start].timestamp) + "-" +
 			strconv.Itoa(pdataTraces[end-1].timestamp)
 		_ = batch_name
 		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
 		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
+        */
 		j += BatchSize
 	}
 	println("done with everything")
