@@ -331,69 +331,6 @@ func isCyclic2(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, 
     return false;
 }
 
-func isCyclic(aliBabaSpans []AliBabaSpan, root_ind int, upstreamMap map[string][]int) bool {
-    println("guess what it's the upstream mpa")
-    for i, j := range upstreamMap {
-        println("upstream map key: ", i, "val: ")
-        for _, k := range j {
-            print(k, " ")
-        }
-        println("")
-    }
-
-
-	stack := make([]int, 0)
-	stack = append(stack, root_ind)
-	visited := make(map[int]bool)
-
-    for {
-        if len(stack) < 1 {
-            break
-        }
-        /*
-        println("visited: ")
-        for i,_ := range visited {
-            print(i, "  ")
-        }
-        println("")
-
-        println("stack: ")
-        for i := 0; i < len(stack); i++ {
-            print(stack[i], "  ")
-        }
-        println("")
-        */
-
-        top := stack[len(stack)-1]
-        visited[top] = true
-        stack = stack[:len(stack)-1]
-        //println("top is ", top)
-        if aliBabaSpans[top].downstream_microservice == aliBabaSpans[top].upstream_microservice {
-            //println("continuing bc it is the same")
-            continue
-        }
-        /*
-        println("stack after removal: ")
-        for i := 0; i < len(stack); i++ {
-            print(stack[i], "  ")
-        }
-        println("")
-
-        println("alibabaspans top is ", aliBabaSpans[top].downstream_microservice)
-        */
-
-        for _, child := range upstreamMap[aliBabaSpans[top].downstream_microservice] {
-            if visited[child] == false {
-                stack = append(stack, child)
-            }
-            if visited[child] == true && aliBabaSpans[child].upstream_microservice != MissingData {
-                return true
-            }
-        }
-    }
-    return false
-}
-
 func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	traces := ptrace.NewTraces()
 	earliest_time := aliBabaSpans[0].timestamp
