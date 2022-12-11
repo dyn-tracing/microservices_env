@@ -30,7 +30,7 @@ const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-demonstrate-bug"
+	BucketSuffix            = "-quest-find-services"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -501,7 +501,12 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
             }
         }
     }
-    w := csv.NewWriter("resources_buckets.csv")
+    mapping_file, err := os.Create("resource_buckets.csv")
+    defer mapping_file.Close()
+    if err != nil {
+        log.Fatalln("failed to open file", err)
+    }
+    w := csv.NewWriter(mapping_file)
     defer w.Flush()
     for resourceName, _ := range resourceNames {
         to_write := []string{resourceName}
