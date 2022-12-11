@@ -11,7 +11,7 @@ import (
 	"hash/fnv"
 	"io"
 	"log"
-	"math/big"
+//	"math/big"
     "sync"
 	mathrand "math/rand"
 	"os"
@@ -294,6 +294,7 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 			var e *googleapi.Error
 			if ok := errors.As(crErr, &e); ok {
 				if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+                    println("failed creating bucket: ", crErr)
 					return fmt.Errorf("failed creating bucket: %w", crErr)
 				} else {
 					println("got 409")
@@ -305,6 +306,11 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 	} else if err != nil {
 		return fmt.Errorf("failed getting bucket attributes: %w", err)
 	}
+	_, err = bkt.Attrs(ctx)
+    if err == storage.ErrBucketNotExist {
+        println("it says bucket doesn't exist when I just created it")
+        return err
+    }
 	return err
 }
 
@@ -758,6 +764,8 @@ func process_file(filename string) Exempted {
 	// Now, we batch.
     println("done creating buckets")
 
+    /*
+
     var wg sync.WaitGroup
 	j := 0
 	for j < len(pdataTraces) {
@@ -790,6 +798,7 @@ func process_file(filename string) Exempted {
 		j += BatchSize
 	}
     wg.Wait()
+    */
     return to_return
 }
 
