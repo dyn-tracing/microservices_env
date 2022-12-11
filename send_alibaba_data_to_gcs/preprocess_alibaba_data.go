@@ -30,7 +30,7 @@ const (
 	ProjectName             = "cost-project-1"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-test-script"
+	BucketSuffix            = "-test-more-parallel"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -506,30 +506,34 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
 
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
+    var wg sync.WaitGroup
 	for resource, spans := range resourceNameToSpans {
-        resource_final := resource
-        if resource_final == MissingData {
-            resource_final = "MissingService"
-        }
-		bucketName := serviceNameToBucketName(resource_final, BucketSuffix)
-		bkt := client.Bucket(bucketName)
+        wg.Add(1)
+        go func(resource string, spans ptrace.Traces, wg *sync.WaitGroup) {
+            resource_final := resource
+            if resource_final == MissingData {
+                resource_final = "MissingService"
+            }
+            bucketName := serviceNameToBucketName(resource_final, BucketSuffix)
+            bkt := client.Bucket(bucketName)
 
-		// Check if bucket exists or not, create one if needed
-        spanBucketExists(ctx, resource_final, true, client)
-		buffer, err := tracesMarshaler.MarshalTraces(spans)
-		if err != nil {
-			print("could not marshal traces")
-			return err
-		}
-		obj := bkt.Object(batch_name)
-		ctx := context.Background()
-		writer := obj.NewWriter(ctx)
-		if _, err := writer.Write(buffer); err != nil {
-			return fmt.Errorf("failed creating the span object: %w", err)
-		}
-		if err := writer.Close(); err != nil {
-			return fmt.Errorf("failed closing the span object: %w", err)
-		}
+            // Check if bucket exists or not, create one if needed
+            spanBucketExists(ctx, resource_final, true, client)
+            buffer, err := tracesMarshaler.MarshalTraces(spans)
+            if err != nil {
+                print("could not marshal traces")
+            }
+            obj := bkt.Object(batch_name)
+            ctx := context.Background()
+            writer := obj.NewWriter(ctx)
+            if _, err := writer.Write(buffer); err != nil {
+                println(fmt.Errorf("failed creating the span object: %w", err))
+            }
+            if err := writer.Close(); err != nil {
+                println(fmt.Errorf("failed closing the span object: %w", err))
+            }
+            wg.Done()
+        }(resource, spans, &wg)
 	}
 	return nil
 }
