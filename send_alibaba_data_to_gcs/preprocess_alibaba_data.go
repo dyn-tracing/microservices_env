@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"math/big"
+    "sync"
 	mathrand "math/rand"
 	"os"
 	"sort"
@@ -725,6 +726,7 @@ func process_file(filename string) Exempted {
 	}
 	_ = client
 
+    var wg sync.WaitGroup
 	j := 0
 	for j < len(pdataTraces) {
 		start := j
@@ -742,10 +744,19 @@ func process_file(filename string) Exempted {
 			strconv.Itoa(pdataTraces[start].timestamp) + "-" +
 			strconv.Itoa(pdataTraces[end-1].timestamp)
 		_ = batch_name
-		sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
-		computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
+        wg.Add(1)
+		go func (pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int) {
+            defer wg.Done()
+            sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
+        }(pdataTraces, batch_name, client, start, end)
+        wg.Add(1)
+		go func (pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int) {
+            defer wg.Done()
+		    computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
+        }(pdataTraces, batch_name, client, start, end)
 		j += BatchSize
 	}
+    wg.Wait()
 	println("done with file: ", filename)
     return to_return
 }
