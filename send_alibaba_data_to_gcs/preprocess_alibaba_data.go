@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	ProjectName             = "dynamic-tracing"
+	ProjectName             = "cost-project-1"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
 	BucketSuffix            = "-test-script"
@@ -484,8 +484,7 @@ func serviceNameToBucketName(service string, suffix string) string {
 	return bucketID + suffix
 }
 
-func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
-	ctx := context.Background()
+func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
 	resourceNameToSpans := make(map[string]ptrace.Traces)
 	for time_with_trace := range traces {
 		span := traces[time_with_trace].trace
@@ -532,7 +531,6 @@ func sendBatchSpansToStorage(traces []TimeWithTrace, batch_name string, client *
 			return fmt.Errorf("failed closing the span object: %w", err)
 		}
 	}
-
 	return nil
 }
 
@@ -620,9 +618,8 @@ func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
 	return spanToHash, spanToHash[&spans[root]]
 }
 
-func computeHashesAndTraceStructToStorage(traces []TimeWithTrace, batch_name string, client *storage.Client) error {
+func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
 	// 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
-	ctx := context.Background()
 	traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[int][]string)
 	for _, trace := range traces {
@@ -744,20 +741,20 @@ func process_file(filename string) Exempted {
 			strconv.Itoa(pdataTraces[start].timestamp) + "-" +
 			strconv.Itoa(pdataTraces[end-1].timestamp)
 		_ = batch_name
-        wg.Add(1)
-		go func (pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int) {
-            defer wg.Done()
-            sendBatchSpansToStorage(pdataTraces[start:end], batch_name, client)
-        }(pdataTraces, batch_name, client, start, end)
-        wg.Add(1)
-		go func (pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int) {
-            defer wg.Done()
-		    computeHashesAndTraceStructToStorage(pdataTraces[start:end], batch_name, client)
-        }(pdataTraces, batch_name, client, start, end)
+
+        wg.Add(2)
+		go func (ctx context.Context, pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int, wg *sync.WaitGroup) {
+            sendBatchSpansToStorage(ctx, pdataTraces[start:end], batch_name, client)
+            wg.Done()
+        }(ctx, pdataTraces, batch_name, client, start, end, &wg)
+
+		go func (ctx context.Context, pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int, wg *sync.WaitGroup) {
+		    computeHashesAndTraceStructToStorage(ctx, pdataTraces[start:end], batch_name, client)
+            wg.Done()
+        }(ctx, pdataTraces, batch_name, client, start, end, &wg)
 		j += BatchSize
 	}
     wg.Wait()
-	println("done with file: ", filename)
     return to_return
 }
 
