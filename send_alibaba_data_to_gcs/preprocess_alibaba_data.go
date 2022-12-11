@@ -27,10 +27,10 @@ import (
 )
 
 const (
-	ProjectName             = "cost-project-1"
+	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-test-more-parallel"
+	BucketSuffix            = "-quest-check-create-buckets-once"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -416,7 +416,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
         if len(queue) > len(aliBabaSpans) {
             os.Exit(0)
         }
-        //println("len queue is ", len(queue))
 		top := queue[0]
 
 		visited[top] = true
@@ -424,7 +423,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 		queue = queue[1:]
 		dm := aliBabaSpans[top].downstream_microservice
 		nextLevel := upstreamMap[dm]
-        //println("trace id is ", aliBabaSpans[top].trace_id)
 
 		if dm == aliBabaSpans[top].upstream_microservice || dm == MissingData {
 			nextLevel = []int{}
@@ -436,11 +434,8 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 
 		traces.ResourceSpans().At(top).ScopeSpans().At(0).Spans().At(0).SetSpanID(span_id)
 
-		// log.Println("Adding: ")
 		for _, ele := range nextLevel {
-			// log.Print(ele, " ")
 			traces.ResourceSpans().At(ele).ScopeSpans().At(0).Spans().At(0).SetParentSpanID(span_id)
-            //println("adding ", ele, " to the queue")
 
             // this speeds up the iteration since we know there aren't any cycles
             if ele == top {
@@ -463,12 +458,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 	// Unreachibility thin'
 	for ind := 0; ind < traces.ResourceSpans().Len(); ind++ {
 		if _, ok := visited[ind]; !ok {
-            //println("trace id of unreachable trace is : ", aliBabaSpans[root_span_index].trace_id)
-            /*
-		    if sn, ok := traces.ResourceSpans().At(ind).Resource().Attributes().Get("rpc.id"); ok {
-                println("unreachable has rpc id of ", sn.AsString())
-            }
-            */
             return TimeWithTrace{-2, ptrace.NewTraces()}
 		}
 	}
@@ -484,13 +473,52 @@ func serviceNameToBucketName(service string, suffix string) string {
 	return bucketID + suffix
 }
 
+func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.Client) {
+    // check this
+    println("beginning of create buckets")
+    var wg sync.WaitGroup
+    wg.Add(2)
+	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
+        spanBucketExists(ctx, TraceBucket, false, client)
+        wg.Done()
+    }(ctx, client, &wg)
+	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
+	    spanBucketExists(ctx, "tracehashes", false, client)
+        wg.Done()
+    }(ctx, client, &wg)
+
+    resourceNames := make(map[string]bool)
+	for time_with_trace := range traces {
+		span := traces[time_with_trace].trace
+		for i := 0; i < span.ResourceSpans().Len(); i++ {
+			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
+                resourceNames[sn.AsString()] = true
+            }
+        }
+    }
+    for resourceName, _ := range resourceNames {
+        wg.Add(1)
+        go func (ctx context.Context, resourceName string, client *storage.Client, wg *sync.WaitGroup) {
+            resource_final := resourceName
+            if resource_final == MissingData {
+                resource_final = "MissingService"
+            }
+            //bucketName := serviceNameToBucketName(resource_final, BucketSuffix)
+            println("checking that span bucket ", resource_final, " exists")
+            spanBucketExists(ctx, resource_final, true, client)
+            wg.Done()
+        }(ctx, resourceName, client, &wg)
+    }
+    wg.Wait()
+}
+
+
 func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
 	resourceNameToSpans := make(map[string]ptrace.Traces)
 	for time_with_trace := range traces {
 		span := traces[time_with_trace].trace
 		for i := 0; i < span.ResourceSpans().Len(); i++ {
 			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
-                //println("considering span of resource ", sn.AsString())
 				if _, ok := resourceNameToSpans[sn.AsString()]; ok {
 					span.ResourceSpans().At(i).CopyTo(resourceNameToSpans[sn.AsString()].ResourceSpans().AppendEmpty())
 				} else {
@@ -503,6 +531,8 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
 			}
 		}
 	}
+
+    println("sending resource spans for batch")
 
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
@@ -517,8 +547,6 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
             bucketName := serviceNameToBucketName(resource_final, BucketSuffix)
             bkt := client.Bucket(bucketName)
 
-            // Check if bucket exists or not, create one if needed
-            spanBucketExists(ctx, resource_final, true, client)
             buffer, err := tracesMarshaler.MarshalTraces(spans)
             if err != nil {
                 print("could not marshal traces")
@@ -535,6 +563,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
             wg.Done()
         }(resource, spans, &wg)
 	}
+    println("done sending resource spans")
 	return nil
 }
 
@@ -654,9 +683,10 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 		hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
 	}
 
+    println("before putting trace sturcture buffer ins torage")
+
 	// 2. Put the trace structure buffer in storage
 	trace_bkt := client.Bucket(serviceNameToBucketName(TraceBucket, BucketSuffix))
-	spanBucketExists(ctx, TraceBucket, false, client)
 
 	trace_obj := trace_bkt.Object(batch_name)
 	w_trace := trace_obj.NewWriter(ctx)
@@ -666,23 +696,29 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	if err := w_trace.Close(); err != nil {
 		return fmt.Errorf("failed closing the trace object %w", err)
 	}
+    println("after putting trace sturcture buffer ins torage")
 	// 3. Put the hash to trace ID mapping in storage
 	bkt := client.Bucket(serviceNameToBucketName("tracehashes", BucketSuffix))
-	spanBucketExists(ctx, "tracehashes", false, client)
 	for hash, traces := range hashToTraceID {
+        println("hash is ", hash)
 		traceIDs := dataBuffer{}
 		for i := 0; i < len(traces); i++ {
 			traceIDs.logEntry("%s", traces[i])
 		}
+        println("after logging traces")
 		obj := bkt.Object(strconv.FormatUint(uint64(hash), 10) + "/" + batch_name)
 		w := obj.NewWriter(ctx)
+        println("before writing")
 		if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
-			return fmt.Errorf("failed creating the object: %w", err)
+            println("hello, error")
+			println(fmt.Errorf("failed creating the object: %w", err))
 		}
 		if err := w.Close(); err != nil {
-			return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err)
+            println("hello2, error")
+			println(fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err))
 		}
 	}
+    println("after putting hash ins torage")
 	return nil
 }
 
@@ -717,15 +753,18 @@ func process_file(filename string) Exempted {
 	sort.Slice(pdataTraces, func(i, j int) bool {
 		return pdataTraces[i].timestamp < pdataTraces[j].timestamp
 	})
-
-	// Now, we batch.
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		print("could not create gcs client")
 		os.Exit(0)
 	}
-	_ = client
+
+    // Make sure all buckets exist
+    createBuckets(ctx, pdataTraces, client)
+
+	// Now, we batch.
+    println("done creating buckets")
 
     var wg sync.WaitGroup
 	j := 0
@@ -758,7 +797,9 @@ func process_file(filename string) Exempted {
         }(ctx, pdataTraces, batch_name, client, start, end, &wg)
 		j += BatchSize
 	}
+    println("waiting for batches and hashes to be sent")
     wg.Wait()
+    println("done waiting for batches and hashes to be sent")
     return to_return
 }
 
