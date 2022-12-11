@@ -11,7 +11,7 @@ import (
 	"hash/fnv"
 	"io"
 	"log"
-//	"math/big"
+    "math/big"
     "sync"
 	mathrand "math/rand"
 	"os"
@@ -501,6 +501,14 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
             }
         }
     }
+    w := csv.NewWriter("resources_buckets.csv")
+    defer w.Flush()
+    for resourceName, _ := range resourceNames {
+        to_write := []string{resourceName}
+        if err := w.Write(to_write); err != nil {
+            log.Fatalln("error writing record to file", err)
+        }
+    }
     for resourceName, _ := range resourceNames {
         wg.Add(1)
         go func (ctx context.Context, resourceName string, client *storage.Client, wg *sync.WaitGroup) {
@@ -764,8 +772,6 @@ func process_file(filename string) Exempted {
 	// Now, we batch.
     println("done creating buckets")
 
-    /*
-
     var wg sync.WaitGroup
 	j := 0
 	for j < len(pdataTraces) {
@@ -798,7 +804,6 @@ func process_file(filename string) Exempted {
 		j += BatchSize
 	}
     wg.Wait()
-    */
     return to_return
 }
 
