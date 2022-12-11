@@ -30,7 +30,7 @@ const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-check-create-buckets-once"
+	BucketSuffix            = "-quest-demonstrate-bug"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -547,18 +547,23 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
             if err != nil {
                 print("could not marshal traces")
             }
+            _ = bkt
+            _ = buffer
             obj := bkt.Object(batch_name)
             ctx := context.Background()
             writer := obj.NewWriter(ctx)
             if _, err := writer.Write(buffer); err != nil {
-                println(fmt.Errorf("failed creating the span object: %w", err))
+                println("failed writing the span object: ", err.Error())
+                println("when we are writing object ", batch_name, " in bucket ", bucketName)
             }
             if err := writer.Close(); err != nil {
-                println(fmt.Errorf("failed closing the span object: %w", err))
+                println("failed closing the span object: ", err.Error())
+                println("when we are writing object ", batch_name, " in bucket ", bucketName)
             }
             wg.Done()
         }(resource, spans, &wg)
 	}
+    wg.Wait()
 	return nil
 }
 
