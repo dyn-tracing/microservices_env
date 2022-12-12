@@ -30,7 +30,7 @@ const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-find-services"
+	BucketSuffix            = "-quest-only-three-buckets"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -291,6 +291,7 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 	_, err := bkt.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
 		if crErr := bkt.Create(ctx, ProjectName, &storageClassAndLocation); crErr != nil {
+            println("had a problem")
 			var e *googleapi.Error
 			if ok := errors.As(crErr, &e); ok {
 				if e.Code != 409 { // 409s mean some other thread created the bucket in the meantime;  ignore it
@@ -302,7 +303,9 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 				}
 
 			}
-		}
+		} else {
+            println("no error in creating bucket ", serviceName)
+        }
 	} else if err != nil {
 		return fmt.Errorf("failed getting bucket attributes: %w", err)
 	}
@@ -482,7 +485,7 @@ func serviceNameToBucketName(service string, suffix string) string {
 func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.Client) {
     // check this
     var wg sync.WaitGroup
-    wg.Add(2)
+    wg.Add(3)
 	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
         spanBucketExists(ctx, TraceBucket, false, client)
         wg.Done()
@@ -491,40 +494,11 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
 	    spanBucketExists(ctx, "tracehashes", false, client)
         wg.Done()
     }(ctx, client, &wg)
+	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
+        spanBucketExists(ctx, "microservices", false, client)
+        wg.Done()
+    }(ctx, client, &wg)
 
-    resourceNames := make(map[string]bool)
-	for time_with_trace := range traces {
-		span := traces[time_with_trace].trace
-		for i := 0; i < span.ResourceSpans().Len(); i++ {
-			if sn, ok := span.ResourceSpans().At(i).Resource().Attributes().Get(conventions.AttributeServiceName); ok {
-                resourceNames[sn.AsString()] = true
-            }
-        }
-    }
-    mapping_file, err := os.Create("resource_buckets.csv")
-    defer mapping_file.Close()
-    if err != nil {
-        log.Fatalln("failed to open file", err)
-    }
-    w := csv.NewWriter(mapping_file)
-    defer w.Flush()
-    for resourceName, _ := range resourceNames {
-        to_write := []string{resourceName}
-        if err := w.Write(to_write); err != nil {
-            log.Fatalln("error writing record to file", err)
-        }
-    }
-    for resourceName, _ := range resourceNames {
-        wg.Add(1)
-        go func (ctx context.Context, resourceName string, client *storage.Client, wg *sync.WaitGroup) {
-            resource_final := resourceName
-            if resource_final == MissingData {
-                resource_final = "MissingService"
-            }
-            spanBucketExists(ctx, resource_final, true, client)
-            wg.Done()
-        }(ctx, resourceName, client, &wg)
-    }
     wg.Wait()
 }
 
@@ -559,7 +533,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
             if resource_final == MissingData {
                 resource_final = "MissingService"
             }
-            bucketName := serviceNameToBucketName(resource_final, BucketSuffix)
+            bucketName := serviceNameToBucketName("microservices", BucketSuffix)
             bkt := client.Bucket(bucketName)
 
             buffer, err := tracesMarshaler.MarshalTraces(spans)
@@ -568,7 +542,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
             }
             _ = bkt
             _ = buffer
-            obj := bkt.Object(batch_name)
+            obj := bkt.Object(resource_final + "/" + batch_name)
             ctx := context.Background()
             writer := obj.NewWriter(ctx)
             if _, err := writer.Write(buffer); err != nil {
