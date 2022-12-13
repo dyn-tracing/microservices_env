@@ -30,7 +30,7 @@ const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-only-three-buckets"
+	BucketSuffix            = "-quest-new-one-csv"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -525,10 +525,10 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
 
 	// 3. Send each resource's spans to storage
 	tracesMarshaler := &ptrace.ProtoMarshaler{}
-    var wg sync.WaitGroup
+    //var wg sync.WaitGroup
 	for resource, spans := range resourceNameToSpans {
-        wg.Add(1)
-        go func(resource string, spans ptrace.Traces, wg *sync.WaitGroup) {
+        //wg.Add(1)
+        //go func(resource string, spans ptrace.Traces, wg *sync.WaitGroup) {
             resource_final := resource
             if resource_final == MissingData {
                 resource_final = "MissingService"
@@ -542,7 +542,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
             }
             _ = bkt
             _ = buffer
-            obj := bkt.Object(resource_final + "/" + batch_name)
+            obj := bkt.Object(resource_final + BucketSuffix + "/" + batch_name)
             ctx := context.Background()
             writer := obj.NewWriter(ctx)
             if _, err := writer.Write(buffer); err != nil {
@@ -553,10 +553,10 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
                 println("failed closing the span object: ", err.Error())
                 println("when we are writing object ", batch_name, " in bucket ", bucketName)
             }
-            wg.Done()
-        }(resource, spans, &wg)
+            //wg.Done()
+        //}(resource, spans, &wg)
 	}
-    wg.Wait()
+    //wg.Wait()
 	return nil
 }
 
