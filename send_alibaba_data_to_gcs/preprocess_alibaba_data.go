@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	storage "cloud.google.com/go/storage"
-	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pcommon" 
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
 	"google.golang.org/api/googleapi"
