@@ -20,14 +20,17 @@ for i in range(1, 16):
         fragmented_traces = int(contents[location_fragmented_traces:end_fragmented_traces])
         traces_per_csv.append(total_traces-(cyclic_traces+fragmented_traces))
 
-print(traces_per_csv)
 accumulated_traces = []
-for i in range(len(traces_per_csv)):
+for i in range(1, len(traces_per_csv)):
     sum = 0
     for j in range(i):
         sum += traces_per_csv[j]
     accumulated_traces.append(sum)
 print(accumulated_traces)
+
+with open("traces_count.csv", "w") as traces_file:
+    writer = csv.writer(traces_file)
+    writer.writerow(accumulated_traces)
 
 
 
