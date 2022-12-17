@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	storage "cloud.google.com/go/storage"
-	"go.opentelemetry.io/collector/pdata/pcommon" 
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
 	"google.golang.org/api/googleapi"
@@ -29,8 +29,9 @@ import (
 const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
+	ListBucket		= "list-hashes"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-hopefully-final"
+	BucketSuffix            = "-quest-with-print"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -485,7 +486,7 @@ func serviceNameToBucketName(service string, suffix string) string {
 func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.Client) {
     // check this
     var wg sync.WaitGroup
-    wg.Add(3)
+    wg.Add(4)
 	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
         spanBucketExists(ctx, TraceBucket, false, client)
         wg.Done()
@@ -496,6 +497,10 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
     }(ctx, client, &wg)
 	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
         spanBucketExists(ctx, "microservices", false, client)
+        wg.Done()
+    }(ctx, client, &wg)
+	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
+        spanBucketExists(ctx, ListBucket, false, client)
         wg.Done()
     }(ctx, client, &wg)
 
@@ -648,6 +653,7 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	// 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
 	traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[int][]string)
+	hashToStructure := make(map[int]dataBuffer)
 	for _, trace := range traces {
 		traceID := trace.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).TraceID()
 		var sp []spanStr
@@ -669,11 +675,26 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 			}
 		}
 		hashmap, hash := hashTrace(ctx, sp)
+		// If the hash to structure has not yet been filled, fill it.
+		hashFilled := true
+		structBuf := dataBuffer{}
+		if _, ok := hashToStructure[hash]; !ok {
+			hashFilled = false
+			structBuf.logEntry("Trace ID: %s:", traceID.HexString())
+		}
 		for i := 0; i < len(sp); i++ {
 			traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
 				strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
+			if !hashFilled {
+				structBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
+					strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
+			}
+
 		}
 		hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
+		if !hashFilled {
+			hashToStructure[hash] = structBuf
+		}
 	}
 
 
@@ -702,6 +723,28 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 		}
 		if err := w.Close(); err != nil {
 			println(fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err))
+		}
+	}
+	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
+	for hash, structure := range hashToStructure {
+		// 1. Does object exist?
+		obj := list_bkt.Object(strconv.FormatUint(uint64(hash), 10))
+		_, err := obj.Attrs(ctx)
+		if err == storage.ErrObjectNotExist {
+			// 2. If doesn't exist, create it
+			w_list := obj.NewWriter(ctx)
+			if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
+				println(fmt.Errorf("failed creating the list object: %w", err))
+				println("error: ", err.Error())
+			}
+			if err := w_list.Close(); err != nil {
+				println(fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err))
+				println("error2: ", err.Error())
+				fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err)
+
+				log.Fatal(err)
+			}
+
 		}
 	}
 	return nil
