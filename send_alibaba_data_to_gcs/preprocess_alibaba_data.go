@@ -30,7 +30,7 @@ import (
 const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
-	ListBucket		= "list-hashes"
+	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
 	BucketSuffix            = "-quest-pprof3"
@@ -167,7 +167,8 @@ func createAliBabaSpan(row []string, microservice_name_mapping map[string]string
 	}
 	newSpan.trace_id = row[1]
 	newSpan.timestamp, _ = strconv.Atoi(row[2])
-	newSpan.timestamp = newSpan.timestamp + 1670427276 // We want realistic timestamps, so just adding time as of Dec 7th to get offsets in the 12 hour Alibaba period
+    // We want realistic timestamps, so just adding time as of Dec 7th to get offsets in the 12 hour Alibaba period
+	newSpan.timestamp = newSpan.timestamp + 1670427276
 	newSpan.rpc_id = row[3]
 	newSpan.rpc_type = row[5]
 	newSpan.ali_interface = row[7]
@@ -320,7 +321,7 @@ func spanBucketExists(ctx context.Context, serviceName string, isService bool, c
 	return err
 }
 
-func isCyclic2(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, visited map[int]bool, recStack []bool) bool {
+func isCyclic(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, visited map[int]bool, recStack []bool) bool {
 
     if visited[v] == false {
         visited[v] = true;
@@ -333,7 +334,7 @@ func isCyclic2(aliBabaSpans []AliBabaSpan, v int, upstreamMap map[string][]int, 
             if aliBabaSpans[child].downstream_microservice == MissingData {
                 continue
             }
-            if visited[child] == false && isCyclic2(aliBabaSpans, child, upstreamMap, visited, recStack) {
+            if visited[child] == false && isCyclic(aliBabaSpans, child, upstreamMap, visited, recStack) {
                 return true
             } else if recStack[child] {
                 return true
@@ -390,17 +391,6 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
 			}
 		}
 	}
-    /*
-    println("it's after creating the upstream mpa")
-    for i, j := range upstreamMap {
-        println("upstream map key: ", i)
-        print("val: ")
-        for _, k := range j {
-            print(k, " ")
-        }
-        println("")
-    }
-    */
 
 	if root_span_index == -1 {
 		return TimeWithTrace{}
@@ -416,7 +406,7 @@ func makePData(aliBabaSpans []AliBabaSpan) TimeWithTrace {
         cyclic_visited[i] = false;
         recStack[i] = false;
     }
-    if (isCyclic2(aliBabaSpans, root_span_index, upstreamMap, cyclic_visited, recStack)) {
+    if (isCyclic(aliBabaSpans, root_span_index, upstreamMap, cyclic_visited, recStack)) {
         // :( cyclic
         return TimeWithTrace{-1, ptrace.NewTraces()}
     }
@@ -505,12 +495,6 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
         spanBucketExists(ctx, ListBucket, false, client)
         wg.Done()
     }(ctx, client, &wg)
-    /*
-	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
-        spanBucketExists(ctx, HashesByServiceBucket, false, client)
-        wg.Done()
-    }(ctx, client, &wg)
-    */
 
     wg.Wait()
 }
@@ -656,7 +640,6 @@ func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
 	}
 	// 2c.  Use previous two mappings to fill out span ID to hash mappings
 	for i := int(maxLevel); i >= 0; i-- {
-		//ex.logger.Info("i", zap.Int("i", int(i)))
 		// for each level, create hash
 		for j := 0; j < len(levelToSpans[i]); j++ {
 			span := levelToSpans[i][j]
@@ -840,20 +823,17 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	if err := w_trace.Close(); err != nil {
 		return fmt.Errorf("failed closing the trace object %w", err)
 	}
-    //fmt.Println("time to send trace structure obj: ", time.Since(computed_time))
 
     before_hash_mapping_time := time.Now()
     _ = before_hash_mapping_time
 
 	// 3. Put the hash to trace ID mapping in storage
     sendHashToTraceIDMapping(ctx, hashToTraceID, batch_name, client)
-    //fmt.Println("time to write trace hashes: ", time.Since(before_hash_mapping_time))
 
     last_time := time.Now()
     _ = last_time
     writeHashExemplars(ctx, hashToStructure, batch_name, client)
 
-    //fmt.Println("time to write exemplars: ", time.Since(last_time))
 	return nil
 }
 
@@ -905,12 +885,26 @@ func process_file(filename string) Exempted {
 
     var wg sync.WaitGroup
 	j := 0
+
+	tracesMarshaler := &ptrace.ProtoMarshaler{}
+    var totalBytes int
+    totalBytes = 0
 	for j < len(pdataTraces) {
 		start := j
 		end := start + BatchSize
 		if end >= len(pdataTraces) {
 			end = len(pdataTraces)
 		}
+
+        // How big is this batch?
+        for i := start; i < end; i++ {
+            buffer, err := tracesMarshaler.MarshalTraces(pdataTraces[i].trace)
+            if err != nil {
+                print("could not marshal traces")
+            }
+            totalBytes += len(buffer)
+        }
+
 		// Name of this batch is...
 		random, _ := rand.Int(rand.Reader, big.NewInt(100000000))
 		int_hash := strconv.FormatUint(uint64(random.Int64()), 10)
@@ -935,7 +929,7 @@ func process_file(filename string) Exempted {
 		j += BatchSize
 	}
     wg.Wait()
-    //fmt.Println("sending data time: ", time.Since(start_time))
+    println("Total bytes: ", totalBytes)
     return to_return
 }
 
@@ -948,7 +942,7 @@ func main() {
 	filename := os.Args[1]
     exempted_total := Exempted{0,0,0}
     go func() {
-        log.Println(http.ListenAndServe("localhost:6060", nil))
+        log.Println(http.ListenAndServe("localhost:6061", nil))
     }()
     if filename == "MSCallGraph" {
         for i:=1; i<=2; i++ {
