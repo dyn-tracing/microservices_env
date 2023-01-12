@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+    "net/http"
 
 	storage "cloud.google.com/go/storage"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -30,8 +31,9 @@ const (
 	ProjectName             = "dynamic-tracing"
 	TraceBucket             = "dyntraces"
 	ListBucket		= "list-hashes"
+    HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-with-print"
+	BucketSuffix            = "-quest-pprof6"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -503,10 +505,48 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
         spanBucketExists(ctx, ListBucket, false, client)
         wg.Done()
     }(ctx, client, &wg)
+    /*
+	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
+        spanBucketExists(ctx, HashesByServiceBucket, false, client)
+        wg.Done()
+    }(ctx, client, &wg)
+    */
 
     wg.Wait()
 }
 
+func sendBatchSpansWorker(ctx context.Context, resourceNameToSpans map[string]ptrace.Traces,
+    batch_name string, client *storage.Client, jobs <-chan string, results chan<- int) {
+	tracesMarshaler := &ptrace.ProtoMarshaler{}
+    for resource := range jobs {
+        resource_final := resource
+        if resource_final == MissingData {
+            resource_final = "MissingService"
+        }
+        spans := resourceNameToSpans[resource]
+        bucketName := serviceNameToBucketName("microservices", BucketSuffix)
+        bkt := client.Bucket(bucketName)
+
+        buffer, err := tracesMarshaler.MarshalTraces(spans)
+        if err != nil {
+            print("could not marshal traces")
+        }
+        _ = bkt
+        _ = buffer
+        obj := bkt.Object(resource_final + BucketSuffix + "/" + batch_name)
+        ctx := context.Background()
+        writer := obj.NewWriter(ctx)
+        if _, err := writer.Write(buffer); err != nil {
+            println("failed writing the span object: ", err.Error())
+            println("when we are writing object ", batch_name, " in bucket ", bucketName)
+        }
+        if err := writer.Close(); err != nil {
+            println("failed closing the span object: ", err.Error())
+            println("when we are writing object ", batch_name, " in bucket ", bucketName)
+        }
+        results <- 1
+    }
+}
 
 func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
 	resourceNameToSpans := make(map[string]ptrace.Traces)
@@ -529,39 +569,22 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
 
 
 	// 3. Send each resource's spans to storage
-	tracesMarshaler := &ptrace.ProtoMarshaler{}
-    //var wg sync.WaitGroup
-	for resource, spans := range resourceNameToSpans {
-        //wg.Add(1)
-        //go func(resource string, spans ptrace.Traces, wg *sync.WaitGroup) {
-            resource_final := resource
-            if resource_final == MissingData {
-                resource_final = "MissingService"
-            }
-            bucketName := serviceNameToBucketName("microservices", BucketSuffix)
-            bkt := client.Bucket(bucketName)
+    numJobs := len(resourceNameToSpans)
+    jobs := make(chan string, numJobs)
+    results := make(chan int, numJobs)
 
-            buffer, err := tracesMarshaler.MarshalTraces(spans)
-            if err != nil {
-                print("could not marshal traces")
-            }
-            _ = bkt
-            _ = buffer
-            obj := bkt.Object(resource_final + BucketSuffix + "/" + batch_name)
-            ctx := context.Background()
-            writer := obj.NewWriter(ctx)
-            if _, err := writer.Write(buffer); err != nil {
-                println("failed writing the span object: ", err.Error())
-                println("when we are writing object ", batch_name, " in bucket ", bucketName)
-            }
-            if err := writer.Close(); err != nil {
-                println("failed closing the span object: ", err.Error())
-                println("when we are writing object ", batch_name, " in bucket ", bucketName)
-            }
-            //wg.Done()
-        //}(resource, spans, &wg)
+    numWorkers := 200;
+    for w := 1; w <= numWorkers; w++ {
+        go sendBatchSpansWorker(ctx, resourceNameToSpans, batch_name, client, jobs, results)
+    }
+	for resource, _ := range resourceNameToSpans {
+        jobs <- resource
 	}
-    //wg.Wait()
+    close(jobs)
+
+    for a := 1; a <= numJobs; a++ {
+        <-results
+    }
 	return nil
 }
 
@@ -649,11 +672,110 @@ func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
 	return spanToHash, spanToHash[&spans[root]]
 }
 
+
+func sendTraceIDsForHashWorker(ctx context.Context, hashToTraceID map[int][]string,
+    batch_name string, client* storage.Client,
+    jobs <-chan int, results chan<- int) {
+	bkt := client.Bucket(serviceNameToBucketName("tracehashes", BucketSuffix))
+
+    for hash := range jobs {
+        traces := hashToTraceID[hash]
+		traceIDs := dataBuffer{}
+		for i := 0; i < len(traces); i++ {
+			traceIDs.logEntry("%s", traces[i])
+		}
+		obj := bkt.Object(strconv.FormatUint(uint64(hash), 10) + "/" + batch_name)
+		w := obj.NewWriter(ctx)
+		if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
+			println(fmt.Errorf("failed creating the object: %w", err))
+			println("error: ", err.Error())
+		}
+		if err := w.Close(); err != nil {
+			println(fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err))
+			println("error: ", err.Error())
+		}
+        results <- 1
+    }
+}
+
+func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]string, batch_name string, client *storage.Client) {
+
+    numJobs := len(hashToTraceID)
+    jobs := make(chan int, numJobs)
+    results := make(chan int, numJobs)
+
+    numWorkers := 10
+
+    for w := 1; w <= numWorkers; w++ {
+        go sendTraceIDsForHashWorker(ctx, hashToTraceID, batch_name, client, jobs, results)
+    }
+
+    for hash, _ := range hashToTraceID {
+        jobs <- hash
+    }
+    close(jobs)
+
+    for a := 1; a <= numJobs; a++ {
+        <-results
+    }
+}
+
+func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
+    batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
+	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
+    for hash := range jobs {
+        structure := hashToStructure[hash]
+		// 1. Does object exist?
+		obj := list_bkt.Object(strconv.FormatUint(uint64(hash), 10))
+		_, err := obj.Attrs(ctx)
+		if err == storage.ErrObjectNotExist {
+			// 2. If doesn't exist, create it
+			w_list := obj.NewWriter(ctx)
+			if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
+				println(fmt.Errorf("failed creating the list object: %w", err))
+				println("error: ", err.Error())
+			}
+			if err := w_list.Close(); err != nil {
+				println(fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err))
+				println("error2: ", err.Error())
+				fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err)
+
+				log.Fatal(err)
+			}
+		}
+        results <- 1
+    }
+}
+
+func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
+    batch_name string, client *storage.Client) {
+    numJobs := len(hashToStructure)
+    jobs := make(chan int, numJobs)
+    results := make(chan int, numJobs)
+
+    numWorkers := 10
+
+    for w := 1; w <= numWorkers; w++ {
+        go writeHashExemplarsWorker(ctx, hashToStructure, batch_name, client, jobs, results)
+    }
+
+    for hash, _ := range hashToStructure {
+        jobs <- hash
+    }
+    close(jobs)
+
+    for a := 1; a <= numJobs; a++ {
+        <-results
+    }
+}
+
 func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
 	// 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
+    start_time := time.Now()
 	traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[int][]string)
 	hashToStructure := make(map[int]dataBuffer)
+    hashToServices := make(map[int][]string)
 	for _, trace := range traces {
 		traceID := trace.trace.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).TraceID()
 		var sp []spanStr
@@ -694,8 +816,15 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 		hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
 		if !hashFilled {
 			hashToStructure[hash] = structBuf
+            var services []string
+            for i :=0; i < len(sp); i++ {
+                services = append(services, sp[i].service)
+            }
+            hashToServices[hash] = services
 		}
 	}
+    fmt.Println("time to compute all hashes: ", time.Since(start_time))
+    computed_time := time.Now()
 
 
 	// 2. Put the trace structure buffer in storage
@@ -709,44 +838,19 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	if err := w_trace.Close(); err != nil {
 		return fmt.Errorf("failed closing the trace object %w", err)
 	}
+    fmt.Println("time to send trace structure obj: ", time.Since(computed_time))
+
+    before_hash_mapping_time := time.Now()
+
 	// 3. Put the hash to trace ID mapping in storage
-	bkt := client.Bucket(serviceNameToBucketName("tracehashes", BucketSuffix))
-	for hash, traces := range hashToTraceID {
-		traceIDs := dataBuffer{}
-		for i := 0; i < len(traces); i++ {
-			traceIDs.logEntry("%s", traces[i])
-		}
-		obj := bkt.Object(strconv.FormatUint(uint64(hash), 10) + "/" + batch_name)
-		w := obj.NewWriter(ctx)
-		if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
-			println(fmt.Errorf("failed creating the object: %w", err))
-		}
-		if err := w.Close(); err != nil {
-			println(fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err))
-		}
-	}
-	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
-	for hash, structure := range hashToStructure {
-		// 1. Does object exist?
-		obj := list_bkt.Object(strconv.FormatUint(uint64(hash), 10))
-		_, err := obj.Attrs(ctx)
-		if err == storage.ErrObjectNotExist {
-			// 2. If doesn't exist, create it
-			w_list := obj.NewWriter(ctx)
-			if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
-				println(fmt.Errorf("failed creating the list object: %w", err))
-				println("error: ", err.Error())
-			}
-			if err := w_list.Close(); err != nil {
-				println(fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err))
-				println("error2: ", err.Error())
-				fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err)
+    sendHashToTraceIDMapping(ctx, hashToTraceID, batch_name, client)
+    fmt.Println("time to write trace hashes: ", time.Since(before_hash_mapping_time))
 
-				log.Fatal(err)
-			}
+    last_time := time.Now()
+    // HERE:
+    writeHashExemplars(ctx, hashToStructure, batch_name, client)
 
-		}
-	}
+    fmt.Println("time to write exemplars: ", time.Since(last_time))
 	return nil
 }
 
@@ -793,6 +897,7 @@ func process_file(filename string) Exempted {
 
 	// Now, we batch.
     println("done creating buckets")
+    start_time := time.Now()
 
     var wg sync.WaitGroup
 	j := 0
@@ -812,12 +917,12 @@ func process_file(filename string) Exempted {
 			strconv.Itoa(pdataTraces[start].timestamp) + "-" +
 			strconv.Itoa(pdataTraces[end-1].timestamp)
 		_ = batch_name
-
         wg.Add(2)
 		go func (ctx context.Context, pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int, wg *sync.WaitGroup) {
             sendBatchSpansToStorage(ctx, pdataTraces[start:end], batch_name, client)
             wg.Done()
         }(ctx, pdataTraces, batch_name, client, start, end, &wg)
+
 
 		go func (ctx context.Context, pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int, wg *sync.WaitGroup) {
 		    computeHashesAndTraceStructToStorage(ctx, pdataTraces[start:end], batch_name, client)
@@ -826,6 +931,7 @@ func process_file(filename string) Exempted {
 		j += BatchSize
 	}
     wg.Wait()
+    fmt.Println("sending data time: ", time.Since(start_time))
     return to_return
 }
 
@@ -837,6 +943,9 @@ func main() {
 
 	filename := os.Args[1]
     exempted_total := Exempted{0,0,0}
+    go func() {
+        log.Println(http.ListenAndServe("localhost:6060", nil))
+    }()
     if filename == "MSCallGraph" {
         for i:=1; i<=2; i++ {
             new_file_name := filename+"_"+strconv.Itoa(i)+".csv"
