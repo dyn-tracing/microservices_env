@@ -1,0 +1,4 @@
+total traces:  136148
+exempted traces (cyclic):  9834
+exempted traces (frag):  17461
+done creating buckets

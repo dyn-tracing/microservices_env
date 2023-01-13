@@ -1,0 +1,7 @@
+total traces:  133579
+exempted traces (cyclic):  8971
+exempted traces (frag):  19326
+no error in creating bucket  tracehashes
+no error in creating bucket  microservices
+no error in creating bucket  dyntraces
+done creating buckets
