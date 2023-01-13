@@ -836,19 +836,35 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	return nil
 }
 
-func process_file(filename string) Exempted {
-	// determine if name mapping file exists
-	microservice_hash_to_name := importNameMapping()
-	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
-    start_time := time.Now()
-	pdataTraces := make([]TimeWithTrace, len(traceIDToAliBabaSpans))
+func createPDataWorker(traceIDToAliBabaSpans map[string][]AliBabaSpan,
+    jobs <-chan string, results chan<- TimeWithTrace) {
+    for traceID := range jobs {
+        results <- makePData(traceIDToAliBabaSpans[traceID])
+    }
+}
+
+func createPDataTraces(traceIDToAliBabaSpans map[string][]AliBabaSpan) ([]TimeWithTrace, Exempted){
+	pdataTraces := make([]TimeWithTrace, 0, len(traceIDToAliBabaSpans))
 	empty := TimeWithTrace{}
     totalTraces := 0
     cyclicExemptedTraces := 0
     fragExemptedTraces := 0
-	for _, aliBabaSpans := range traceIDToAliBabaSpans {
-		// We need to create pdata spans
-		timeAndpdataSpans := makePData(aliBabaSpans)
+
+    numJobs := len(traceIDToAliBabaSpans)
+    jobs := make(chan string, numJobs)
+    results := make(chan TimeWithTrace, numJobs)
+
+    numWorkers := 32 // Should be number of cores; this is purely CPU-bound work
+    for w := 1; w <= numWorkers; w++ {
+        go createPDataWorker(traceIDToAliBabaSpans, jobs, results)
+    }
+	for traceID, _ := range traceIDToAliBabaSpans {
+        jobs <- traceID
+    }
+    close(jobs)
+
+    for a := 1; a <= numJobs; a++ {
+        timeAndpdataSpans := <-results
         totalTraces += 1
 		if timeAndpdataSpans != empty && timeAndpdataSpans.timestamp != -1 && timeAndpdataSpans.timestamp != -2 {
 			pdataTraces = append(pdataTraces, timeAndpdataSpans)
@@ -858,12 +874,23 @@ func process_file(filename string) Exempted {
             fragExemptedTraces += 1
         }
 	}
-    fmt.Println("time to create pdata spans: ", time.Since(start_time))
 
     println("total traces: ", totalTraces)
     println("exempted traces (cyclic): ", cyclicExemptedTraces)
     println("exempted traces (frag): ", fragExemptedTraces)
     to_return := Exempted{totalTraces, cyclicExemptedTraces, fragExemptedTraces}
+
+    return pdataTraces, to_return
+}
+
+
+func process_file(filename string) Exempted {
+	// determine if name mapping file exists
+	microservice_hash_to_name := importNameMapping()
+	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
+    start_time := time.Now()
+    pdataTraces, to_return := createPDataTraces(traceIDToAliBabaSpans)
+    fmt.Println("time to create pdata spans: ", time.Since(start_time))
 
 	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
