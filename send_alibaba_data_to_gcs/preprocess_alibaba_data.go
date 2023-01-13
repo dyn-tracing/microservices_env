@@ -690,6 +690,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     for w := 1; w <= numWorkers; w++ {
         go sendTraceIDsForHashWorker(ctx, hashToTraceID, batch_name, client, jobs, results)
     }
+    computed_time := time.Now()
 
     for hash, _ := range hashToTraceID {
         jobs <- hash
@@ -699,6 +700,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     for a := 1; a <= numJobs; a++ {
         <-results
     }
+    fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(start_time))
 }
 
 func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
