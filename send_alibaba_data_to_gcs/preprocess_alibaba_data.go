@@ -700,7 +700,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     for a := 1; a <= numJobs; a++ {
         <-results
     }
-    fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(start_time))
+    fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(computed_time))
 }
 
 func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
@@ -841,7 +841,7 @@ func process_file(filename string) Exempted {
 	microservice_hash_to_name := importNameMapping()
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
     start_time := time.Now()
-	pdataTraces := make([]TimeWithTrace, 0)
+	pdataTraces := make([]TimeWithTrace, len(traceIDToAliBabaSpans))
 	empty := TimeWithTrace{}
     totalTraces := 0
     cyclicExemptedTraces := 0
