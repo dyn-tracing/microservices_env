@@ -884,6 +884,37 @@ func createPDataTraces(traceIDToAliBabaSpans map[string][]AliBabaSpan) ([]TimeWi
     return pdataTraces, to_return
 }
 
+func getTotalBytesWorker(pdataTraces []TimeWithTrace, jobs <-chan int, results chan<- int) {
+	tracesMarshaler := &ptrace.ProtoMarshaler{}
+    for index := range jobs {
+        buffer, err := tracesMarshaler.MarshalTraces(pdataTraces[index].trace)
+        if err != nil {
+            print("could not marshal traces")
+        }
+        results <- len(buffer)
+    }
+}
+
+func getTotalBytes(pdataTraces []TimeWithTrace) int {
+    totalBytes := 0
+    numJobs := len(pdataTraces)
+    jobs := make(chan int, numJobs)
+    results := make(chan int, numJobs)
+
+    numWorkers := 32 // Should be number of cores; this is purely CPU-bound work
+    for w := 1; w <= numWorkers; w++ {
+        go getTotalBytesWorker(pdataTraces, jobs, results)
+    }
+	for i := 0; i < len(pdataTraces); i++ {
+        jobs <- i
+    }
+    close(jobs)
+
+    for a := 1; a <= numJobs; a++ {
+        totalBytes += <-results
+    }
+    return totalBytes
+}
 
 func process_file(filename string) Exempted {
 	// determine if name mapping file exists
@@ -919,24 +950,12 @@ func process_file(filename string) Exempted {
     var wg sync.WaitGroup
 	j := 0
 
-	tracesMarshaler := &ptrace.ProtoMarshaler{}
-    var totalBytes int
-    totalBytes = 0
 	for j < len(pdataTraces) {
 		start := j
 		end := start + BatchSize
 		if end >= len(pdataTraces) {
 			end = len(pdataTraces)
 		}
-
-        // How big is this batch?
-        for i := start; i < end; i++ {
-            buffer, err := tracesMarshaler.MarshalTraces(pdataTraces[i].trace)
-            if err != nil {
-                print("could not marshal traces")
-            }
-            totalBytes += len(buffer)
-        }
 
 		// Name of this batch is...
 		random, _ := rand.Int(rand.Reader, big.NewInt(100000000))
@@ -962,6 +981,7 @@ func process_file(filename string) Exempted {
 	}
     wg.Wait()
     fmt.Println("time to send all data to GCS: ", time.Since(start_sending_time))
+    totalBytes := getTotalBytes(pdataTraces)
     println("Total bytes: ", totalBytes)
     return to_return
 }
