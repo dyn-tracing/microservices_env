@@ -17,8 +17,9 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
     "net/http"
+	"strings"
+    _ "net/http/pprof"
 
 	storage "cloud.google.com/go/storage"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -974,7 +975,7 @@ func main() {
 	filename := os.Args[1]
     exempted_total := Exempted{0,0,0}
     go func() {
-        log.Println(http.ListenAndServe("localhost:6061", nil))
+        log.Println(http.ListenAndServe("localhost:6060", nil))
     }()
     if filename == "MSCallGraph" {
         for i:=1; i<=2; i++ {
