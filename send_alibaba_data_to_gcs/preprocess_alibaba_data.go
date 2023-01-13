@@ -701,7 +701,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     for a := 1; a <= numJobs; a++ {
         <-results
     }
-    fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(computed_time))
+    printifverbose("time for send hash to trace ID mapping to actually run: ", time.Since(computed_time))
 }
 
 func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
@@ -807,7 +807,7 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
             hashToServices[hash] = services
 		}
 	}
-    fmt.Println("time to compute all hashes: ", time.Since(start_time))
+    printifverbose("time to compute all hashes: ", time.Since(start_time))
     computed_time := time.Now()
 
 
@@ -822,17 +822,17 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	if err := w_trace.Close(); err != nil {
 		return fmt.Errorf("failed closing the trace object %w", err)
 	}
-    fmt.Println("time to send trace struct buffer: ", time.Since(computed_time))
+    printifverbose("time to send trace struct buffer: ", time.Since(computed_time))
 
     before_hash_mapping_time := time.Now()
 
 	// 3. Put the hash to trace ID mapping in storage
     sendHashToTraceIDMapping(ctx, hashToTraceID, batch_name, client)
-    fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
+    printifverbose("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
 
     last_time := time.Now()
     writeHashExemplars(ctx, hashToStructure, batch_name, client)
-    fmt.Println("time to write hash exemplars: ", time.Since(last_time))
+    printifverbose("time to write hash exemplars: ", time.Since(last_time))
 
 	return nil
 }
@@ -916,13 +916,20 @@ func getTotalBytes(pdataTraces []TimeWithTrace) int {
     return totalBytes
 }
 
+func printifverbose(prestr string, dur time.Duration) {
+    verbose := true
+    if verbose {
+        printifverbose(prestr, dur)
+    }
+}
+
 func process_file(filename string) Exempted {
 	// determine if name mapping file exists
 	microservice_hash_to_name := importNameMapping()
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
     start_time := time.Now()
     pdataTraces, to_return := createPDataTraces(traceIDToAliBabaSpans)
-    fmt.Println("time to create pdata spans: ", time.Since(start_time))
+    printifverbose("time to create pdata spans: ", time.Since(start_time))
 
     sorting_time := time.Now()
 	// Then organize the spans by time, and batch them.
@@ -935,12 +942,12 @@ func process_file(filename string) Exempted {
 		print("could not create gcs client")
 		os.Exit(0)
 	}
-    fmt.Println("time to sort and create client: ", time.Since(sorting_time))
+    printifverbose("time to sort and create client: ", time.Since(sorting_time))
     buckets_exist_time := time.Now()
 
     // Make sure all buckets exist
     createBuckets(ctx, pdataTraces, client)
-    fmt.Println("time to make sure buckets exist: ", time.Since(buckets_exist_time))
+    printifverbose("time to make sure buckets exist: ", time.Since(buckets_exist_time))
 
 
 	// Now, we batch.
@@ -980,7 +987,7 @@ func process_file(filename string) Exempted {
 		j += BatchSize
 	}
     wg.Wait()
-    fmt.Println("time to send all data to GCS: ", time.Since(start_sending_time))
+    printifverbose("time to send all data to GCS: ", time.Since(start_sending_time))
     totalBytes := getTotalBytes(pdataTraces)
     println("Total bytes: ", totalBytes)
     return to_return
