@@ -515,8 +515,6 @@ func sendBatchSpansWorker(ctx context.Context, resourceNameToSpans map[string]pt
         if err != nil {
             print("could not marshal traces")
         }
-        _ = bkt
-        _ = buffer
         obj := bkt.Object(resource_final + BucketSuffix + "/" + batch_name)
         ctx := context.Background()
         writer := obj.NewWriter(ctx)
@@ -755,7 +753,6 @@ func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
 func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
 	// 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     start_time := time.Now()
-    _ = start_time
 	traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[int][]string)
 	hashToStructure := make(map[int]dataBuffer)
@@ -807,9 +804,8 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
             hashToServices[hash] = services
 		}
 	}
-    //fmt.Println("time to compute all hashes: ", time.Since(start_time))
+    fmt.Println("time to compute all hashes: ", time.Since(start_time))
     computed_time := time.Now()
-    _ = computed_time
 
 
 	// 2. Put the trace structure buffer in storage
@@ -823,16 +819,17 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	if err := w_trace.Close(); err != nil {
 		return fmt.Errorf("failed closing the trace object %w", err)
 	}
+    fmt.Println("time to send trace struct buffer: ", time.Since(computed_time))
 
     before_hash_mapping_time := time.Now()
-    _ = before_hash_mapping_time
 
 	// 3. Put the hash to trace ID mapping in storage
     sendHashToTraceIDMapping(ctx, hashToTraceID, batch_name, client)
+    fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
 
     last_time := time.Now()
-    _ = last_time
     writeHashExemplars(ctx, hashToStructure, batch_name, client)
+    fmt.Println("time to write hash exemplars: ", time.Since(last_time))
 
 	return nil
 }
@@ -841,6 +838,7 @@ func process_file(filename string) Exempted {
 	// determine if name mapping file exists
 	microservice_hash_to_name := importNameMapping()
 	traceIDToAliBabaSpans := importAliBabaData(filename, 1, microservice_hash_to_name)
+    start_time := time.Now()
 	pdataTraces := make([]TimeWithTrace, 0)
 	empty := TimeWithTrace{}
     totalTraces := 0
@@ -858,6 +856,7 @@ func process_file(filename string) Exempted {
             fragExemptedTraces += 1
         }
 	}
+    fmt.Println("time to create pdata spans: ", time.Since(start_time))
 
     println("total traces: ", totalTraces)
     println("exempted traces (cyclic): ", cyclicExemptedTraces)
@@ -880,8 +879,7 @@ func process_file(filename string) Exempted {
 
 	// Now, we batch.
     println("done creating buckets")
-    start_time := time.Now()
-    _ = start_time
+    start_sending_time := time.Now()
 
     var wg sync.WaitGroup
 	j := 0
@@ -914,7 +912,6 @@ func process_file(filename string) Exempted {
 		batch_name := int_hash[0:2] + "-" +
 			strconv.Itoa(pdataTraces[start].timestamp) + "-" +
 			strconv.Itoa(pdataTraces[end-1].timestamp)
-		_ = batch_name
         wg.Add(2)
 		go func (ctx context.Context, pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int, wg *sync.WaitGroup) {
             sendBatchSpansToStorage(ctx, pdataTraces[start:end], batch_name, client)
@@ -929,6 +926,7 @@ func process_file(filename string) Exempted {
 		j += BatchSize
 	}
     wg.Wait()
+    fmt.Println("time to send all data to GCS: ", time.Since(start_sending_time))
     println("Total bytes: ", totalBytes)
     return to_return
 }
