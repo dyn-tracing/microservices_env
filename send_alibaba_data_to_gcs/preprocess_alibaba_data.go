@@ -892,6 +892,7 @@ func process_file(filename string) Exempted {
     pdataTraces, to_return := createPDataTraces(traceIDToAliBabaSpans)
     fmt.Println("time to create pdata spans: ", time.Since(start_time))
 
+    sorting_time := time.Now()
 	// Then organize the spans by time, and batch them.
 	sort.Slice(pdataTraces, func(i, j int) bool {
 		return pdataTraces[i].timestamp < pdataTraces[j].timestamp
@@ -902,9 +903,13 @@ func process_file(filename string) Exempted {
 		print("could not create gcs client")
 		os.Exit(0)
 	}
+    fmt.Println("time to sort and create client: ", time.Since(sorting_time))
+    buckets_exist_time := time.Now()
 
     // Make sure all buckets exist
     createBuckets(ctx, pdataTraces, client)
+    fmt.Println("time to make sure buckets exist: ", time.Since(buckets_exist_time))
+
 
 	// Now, we batch.
     println("done creating buckets")
