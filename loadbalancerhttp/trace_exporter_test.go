@@ -32,7 +32,7 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumertest"
     "go.opentelemetry.io/collector/exporter"
-	"go.opentelemetry.io/collector/exporter/otlpexporter"
+	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 	"go.opentelemetry.io/collector/service/servicetest"
     "go.opentelemetry.io/collector/pdata/pcommon"
     "go.opentelemetry.io/collector/pdata/ptrace"
@@ -269,15 +269,14 @@ func TestBuildExporterConfig(t *testing.T) {
 	require.NotNil(t, c)
 
 	// test
-	defaultCfg := otlpexporter.NewFactory().CreateDefaultConfig().(*otlpexporter.Config)
+	defaultCfg := otlphttpexporter.NewFactory().CreateDefaultConfig().(*otlphttpexporter.Config)
 	exporterCfg := buildExporterConfig(c.(*Config), "the-endpoint")
 
 	// verify
-	grpcSettings := defaultCfg.GRPCClientSettings
-	grpcSettings.Endpoint = "the-endpoint"
-	assert.Equal(t, grpcSettings, exporterCfg.GRPCClientSettings)
+	httpSettings := defaultCfg.HTTPClientSettings
+	httpSettings.Endpoint = "the-endpoint"
+	assert.Equal(t, httpSettings, exporterCfg.HTTPClientSettings)
 
-	assert.Equal(t, defaultCfg.TimeoutSettings, exporterCfg.TimeoutSettings)
 	assert.Equal(t, defaultCfg.QueueSettings, exporterCfg.QueueSettings)
 	assert.Equal(t, defaultCfg.RetrySettings, exporterCfg.RetrySettings)
 }
