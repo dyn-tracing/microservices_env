@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-pprof3"
+	BucketSuffix            = "-quest-test"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -724,8 +724,11 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
 
 				log.Fatal(err)
 			}
-		}
-        results <- 1
+            // Results counts how many new exemplars
+            results <- 1
+		} else {
+            results <- 0
+        }
     }
 }
 
@@ -746,9 +749,11 @@ func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
     }
     close(jobs)
 
+    totalNew := 0
     for a := 1; a <= numJobs; a++ {
-        <-results
+        totalNew += <-results
     }
+    println("New hashes made: ", totalNew)
 }
 
 func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
