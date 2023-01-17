@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test"
+	BucketSuffix            = "-quest-test4"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -554,7 +554,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
     jobs := make(chan string, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 200;
+    numWorkers := 150;
     for w := 1; w <= numWorkers; w++ {
         go sendBatchSpansWorker(ctx, resourceNameToSpans, batch_name, client, jobs, results)
     }
