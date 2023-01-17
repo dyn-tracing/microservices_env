@@ -733,7 +733,7 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
 }
 
 func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
-    batch_name string, client *storage.Client) {
+    batch_name string, client *storage.Client) int {
     numJobs := len(hashToStructure)
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
@@ -753,10 +753,10 @@ func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
     for a := 1; a <= numJobs; a++ {
         totalNew += <-results
     }
-    println("New hashes made: ", totalNew)
+    return totalNew
 }
 
-func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) error {
+func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWithTrace, batch_name string, client *storage.Client) (error, int) {
 	// 1. Collect the trace structures in traceStructBuf, and a map of hashes to traceIDs
     //start_time := time.Now()
 	traceStructBuf := dataBuffer{}
@@ -820,10 +820,10 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	trace_obj := trace_bkt.Object(batch_name)
 	w_trace := trace_obj.NewWriter(ctx)
 	if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
-		return fmt.Errorf("failed creating the trace object: %w", err)
+		return fmt.Errorf("failed creating the trace object: %w", err), 0
 	}
 	if err := w_trace.Close(); err != nil {
-		return fmt.Errorf("failed closing the trace object %w", err)
+		return fmt.Errorf("failed closing the trace object %w", err), 0
 	}
     //fmt.Println("time to send trace struct buffer: ", time.Since(computed_time))
 
@@ -834,10 +834,10 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
     //fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
 
     //last_time := time.Now()
-    writeHashExemplars(ctx, hashToStructure, batch_name, client)
+    numHashExemplars := writeHashExemplars(ctx, hashToStructure, batch_name, client)
     //fmt.Println("time to write hash exemplars: ", time.Since(last_time))
 
-	return nil
+	return nil, numHashExemplars
 }
 
 func createPDataWorker(traceIDToAliBabaSpans map[string][]AliBabaSpan,
@@ -953,6 +953,8 @@ func process_file(filename string) Exempted {
     var wg sync.WaitGroup
 	j := 0
 
+    newHashesChannels := make(chan int, len(pdataTraces))
+
 	for j < len(pdataTraces) {
 		start := j
 		end := start + BatchSize
@@ -975,14 +977,23 @@ func process_file(filename string) Exempted {
             wg.Done()
         }(ctx, pdataTraces, batch_name, client, start, end, &wg)
 
-
 		go func (ctx context.Context, pdataTraces []TimeWithTrace, batch_name string, client *storage.Client, start int, end int, wg *sync.WaitGroup) {
-		    computeHashesAndTraceStructToStorage(ctx, pdataTraces[start:end], batch_name, client)
+		    err, numHashes := computeHashesAndTraceStructToStorage(ctx, pdataTraces[start:end], batch_name, client)
+            if err != nil {
+                print("error in compute hashes and trace struct to storage")
+            }
+            newHashesChannels <- numHashes
             wg.Done()
         }(ctx, pdataTraces, batch_name, client, start, end, &wg)
 		j += BatchSize
 	}
     wg.Wait()
+    close(newHashesChannels)
+    totalNewHashes := 0
+    for i := 0; i< len(pdataTraces); i++ {
+        totalNewHashes += <-newHashesChannels
+    }
+    println("total new hashes: ", totalNewHashes)
     //fmt.Println("time to send all data to GCS: ", time.Since(start_sending_time))
     totalBytes := getTotalBytes(pdataTraces)
     println("Total bytes: ", totalBytes)
