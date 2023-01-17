@@ -36,13 +36,13 @@ func TestLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, component.UnmarshalConfig(sub, cfg))
 
-	assert.Equal(t, len(cfg.Exporters), 2)
+    assert.Equal(t, sanitize(cfg.(*Config)), sanitize(factory.CreateDefaultConfig().(*Config)))
 
-	defaultConfig := factory.CreateDefaultConfig().(*Config)
-	assert.Equal(t, cfg.Exporters[config.NewComponentID(typeStr)], defaultConfig)
+    sub, err = cm.Sub(component.NewIDWithName(typeStr, "customname").String())
+	require.NoError(t, err)
+	require.NoError(t, component.UnmarshalConfig(sub, cfg))
 
 	customConfig := factory.CreateDefaultConfig().(*Config)
-	customConfig.SetIDName("customname")
 
 	customConfig.ProjectID = "my-project"
 	customConfig.UserAgent = "opentelemetry-collector-contrib {{version}}"
@@ -54,7 +54,7 @@ func TestLoadConfig(t *testing.T) {
 		Timeout: 20 * time.Second,
 	}
 	customConfig.Compression = "gzip"
-	assert.Equal(t, cfg.Exporters[config.NewComponentIDWithName(typeStr, "customname")], customConfig)
+    assert.Equal(t, cfg, customConfig)
 }
 
 func TestCompressionConfigValidation(t *testing.T) {
@@ -68,4 +68,10 @@ func TestCompressionConfigValidation(t *testing.T) {
 	assert.Error(t, c.validate())
 	c.Compression = ""
 	assert.NoError(t, c.validate())
+}
+
+func sanitize(cfg *Config) *Config {
+	cfg.Config.MetricConfig.MapMonitoredResource = nil
+	cfg.Config.MetricConfig.GetMetricName = nil
+	return cfg
 }

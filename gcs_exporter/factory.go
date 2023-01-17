@@ -50,7 +50,6 @@ func ensureExporter(params exporter.CreateSettings, pCfg *Config) *storageExport
 		return receiver
 	}
 	receiver = &storageExporter{
-		instanceName:     pCfg.ID().Name(),
 		logger:           params.Logger,
 		userAgent:        strings.ReplaceAll(pCfg.UserAgent, "{{version}}", params.BuildInfo.Version),
 		ceSource:         fmt.Sprintf("/opentelemetry/collector/%s/%s", name, params.BuildInfo.Version),
