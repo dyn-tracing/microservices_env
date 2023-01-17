@@ -126,6 +126,7 @@ func (lb *loadBalancerImp) addMissingExporters(ctx context.Context, endpoints []
         endpoint = endpointWithPort(endpoint)
 
 		if _, exists := lb.exporters[endpoint]; !exists {
+            print("adding exporter for endpoint: ", endpoint)
 			exp, err := lb.componentFactory(ctx, "http://" + endpoint)
 			if err != nil {
 				lb.logger.Error("failed to create new exporter for endpoint", zap.String("endpoint", endpoint), zap.Error(err))
@@ -149,9 +150,13 @@ func endpointWithPort(endpoint string) string {
 }
 
 func (lb *loadBalancerImp) removeExtraExporters(ctx context.Context, endpoints []string) {
+	endpointsWithPort := make([]string, len(endpoints))
+	for i, e := range endpoints {
+		endpointsWithPort[i] = endpointWithPort(e)
+	}
 	for existing := range lb.exporters {
-		if !endpointFound(existing, endpoints) {
-			lb.exporters[existing].Shutdown(ctx)
+		if !endpointFound(existing, endpointsWithPort) {
+			_ = lb.exporters[existing].Shutdown(ctx)
 			delete(lb.exporters, existing)
 		}
 	}
@@ -184,7 +189,7 @@ func (lb *loadBalancerImp) Exporter(endpoint string) (component.Component, error
 	// data loss because the latest batches sent to outdated backend will never find their way out.
 	// for details: https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/1690
 	lb.updateLock.RLock()
-	exp, found := lb.exporters[endpoint]
+	exp, found := lb.exporters[endpointWithPort(endpoint)]
 	lb.updateLock.RUnlock()
 	if !found {
 		// something is really wrong... how come we couldn't find the exporter??

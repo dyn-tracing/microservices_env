@@ -136,7 +136,7 @@ func TestConsumeTraces(t *testing.T) {
 	require.NoError(t, err)
 
 	// pre-load an exporter here, so that we don't use the actual OTLP exporter
-	lb.exporters["endpoint-1"] = newNopMockTracesExporter()
+    lb.addMissingExporters(context.Background(), []string{"endpoint-1"})
 	lb.res = &mockResolver{
 		triggerCallbacks: true,
 		onResolve: func(ctx context.Context) ([]string, error) {
@@ -233,7 +233,7 @@ func TestConsumeTracesUnexpectedExporterType(t *testing.T) {
 	require.NoError(t, err)
 
 	// pre-load an exporter here, so that we don't use the actual OTLP exporter
-	lb.exporters["endpoint-1"] = newNopMockExporter()
+    lb.addMissingExporters(context.Background(), []string{"endpoint-1"})
 	lb.res = &mockResolver{
 		triggerCallbacks: true,
 		onResolve: func(ctx context.Context) ([]string, error) {
@@ -288,7 +288,7 @@ func appendSimpleTraceWithID(dest ptrace.ResourceSpans, id pcommon.TraceID) {
 func TestBatchWithTwoTraces(t *testing.T) {
     sink := new(consumertest.TracesSink)
 	componentFactory := func(ctx context.Context, endpoint string) (component.Component, error) {
-		return newNopMockTracesExporter(), nil
+		return newMockTracesExporter(sink.ConsumeTraces), nil
 	}
 	lb, err := newLoadBalancer(componenttest.NewNopExporterCreateSettings(), simpleConfig(), componentFactory)
 	require.NotNil(t, lb)
@@ -425,14 +425,14 @@ func TestRollingUpdatesWhenConsumeTraces(t *testing.T) {
 
 	var counter1, counter2 int64
 	defaultExporters := map[string]component.Component{
-		"127.0.0.1": newMockTracesExporter(func(ctx context.Context, td ptrace.Traces) error {
+		"127.0.0.1:4317": newMockTracesExporter(func(ctx context.Context, td ptrace.Traces) error {
 			atomic.AddInt64(&counter1, 1)
 			// simulate an unreachable backend
 			time.Sleep(10 * time.Second)
 			return nil
 		},
 		),
-		"127.0.0.2": newMockTracesExporter(func(ctx context.Context, td ptrace.Traces) error {
+		"127.0.0.2:4317": newMockTracesExporter(func(ctx context.Context, td ptrace.Traces) error {
 			atomic.AddInt64(&counter2, 1)
 			return nil
 		},

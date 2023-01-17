@@ -4,7 +4,7 @@ receivers:
 processors:
 
 exporters:
-  loadbalancing:
+  loadbalancerhttp:
     protocol:
       otlp:
         endpoint: should-be-replaced
@@ -20,10 +20,10 @@ service:
       - nop
       processors: []
       exporters:
-      - loadbalancing
+      - loadbalancerhttp
     logs:
       receivers:
         - nop
       processors: []
       exporters:
-        - loadbalancing
+        - loadbalancerhttp
