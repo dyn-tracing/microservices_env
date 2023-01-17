@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumertest"
     "go.opentelemetry.io/collector/pdata/pcommon"
@@ -48,9 +47,7 @@ func TestNewLogsExporter(t *testing.T) {
 		},
 		{
 			"empty",
-			&Config{
-				ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
-			},
+			&Config{},
 			errNoResolver,
 		},
 	} {
@@ -123,7 +120,7 @@ func TestLogExporterShutdown(t *testing.T) {
 }
 
 func TestConsumeLogs(t *testing.T) {
-	componentFactory := func(ctx context.Context, endpoint string) (component.Exporter, error) {
+	componentFactory := func(ctx context.Context, endpoint string) (component.Component, error) {
 		return newNopMockLogsExporter(), nil
 	}
 	lb, err := newLoadBalancer(componenttest.NewNopExporterCreateSettings(), simpleConfig(), componentFactory)
@@ -156,7 +153,7 @@ func TestConsumeLogs(t *testing.T) {
 }
 
 func TestConsumeLogsExporterNotFound(t *testing.T) {
-	componentFactory := func(ctx context.Context, endpoint string) (component.Exporter, error) {
+	componentFactory := func(ctx context.Context, endpoint string) (component.Component, error) {
 		return newNopMockTracesExporter(), nil
 	}
 	lb, err := newLoadBalancer(componenttest.NewNopExporterCreateSettings(), simpleConfig(), componentFactory)
@@ -188,7 +185,7 @@ func TestConsumeLogsExporterNotFound(t *testing.T) {
 }
 
 func TestConsumeLogsUnexpectedExporterType(t *testing.T) {
-	componentFactory := func(ctx context.Context, endpoint string) (component.Exporter, error) {
+	componentFactory := func(ctx context.Context, endpoint string) (component.Component, error) {
 		return newNopMockExporter(), nil
 	}
 	lb, err := newLoadBalancer(componenttest.NewNopExporterCreateSettings(), simpleConfig(), componentFactory)
@@ -222,7 +219,8 @@ func TestConsumeLogsUnexpectedExporterType(t *testing.T) {
 }
 
 func TestLogBatchWithTwoTraces(t *testing.T) {
-	componentFactory := func(ctx context.Context, endpoint string) (component.Exporter, error) {
+    sink := new(consumertest.LogsSink)
+	componentFactory := func(ctx context.Context, endpoint string) (component.Component, error) {
 		return newNopMockLogsExporter(), nil
 	}
 	lb, err := newLoadBalancer(componenttest.NewNopExporterCreateSettings(), simpleConfig(), componentFactory)
@@ -278,7 +276,7 @@ func TestNoLogsInBatch(t *testing.T) {
 			"no logs",
 			func() plog.Logs {
 				batch := plog.NewLogs()
-				batch.ResourceLogs().AppendEmpty().InstrumentationLibraryLogs().AppendEmpty()
+				batch.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 				return batch
 			}(),
 		},
@@ -291,7 +289,8 @@ func TestNoLogsInBatch(t *testing.T) {
 }
 
 func TestLogsWithoutTraceID(t *testing.T) {
-	componentFactory := func(ctx context.Context, endpoint string) (component.Exporter, error) {
+    sink := new(consumertest.LogsSink)
+	componentFactory := func(ctx context.Context, endpoint string) (component.Component, error) {
 		return newNopMockLogsExporter(), nil
 	}
 	lb, err := newLoadBalancer(componenttest.NewNopExporterCreateSettings(), simpleConfig(), componentFactory)
@@ -366,12 +365,11 @@ func TestRollingUpdatesWhenConsumeLogs(t *testing.T) {
 	res.resInterval = 10 * time.Millisecond
 
 	cfg := &Config{
-		ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
 		Resolver: ResolverSettings{
 			DNS: &DNSResolver{Hostname: "service-1", Port: ""},
 		},
 	}
-	componentFactory := func(ctx context.Context, endpoint string) (component.Exporter, error) {
+	componentFactory := func(ctx context.Context, endpoint string) (component.Component, error) {
 		return newNopMockLogsExporter(), nil
 	}
 	lb, err := newLoadBalancer(componenttest.NewNopExporterCreateSettings(), cfg, componentFactory)
@@ -386,7 +384,7 @@ func TestRollingUpdatesWhenConsumeLogs(t *testing.T) {
 	p.loadBalancer = lb
 
 	var counter1, counter2 int64
-	defaultExporters := map[string]component.Exporter{
+	defaultExporters := map[string]component.Component{
 		"127.0.0.1": newMockLogsExporter(func(ctx context.Context, ld plog.Logs) error {
 			atomic.AddInt64(&counter1, 1)
 			// simulate an unreachable backend
@@ -460,7 +458,7 @@ func simpleLogs() plog.Logs {
 func simpleLogWithID(id pcommon.TraceID) plog.Logs {
 	logs := plog.NewLogs()
 	rl := logs.ResourceLogs().AppendEmpty()
-	ill := rl.InstrumentationLibraryLogs().AppendEmpty()
+	ill := rl.ScopeLogs().AppendEmpty()
 	ill.LogRecords().AppendEmpty().SetTraceID(id)
 
 	return logs
@@ -469,7 +467,7 @@ func simpleLogWithID(id pcommon.TraceID) plog.Logs {
 func simpleLogWithoutID() plog.Logs {
 	logs := plog.NewLogs()
 	rl := logs.ResourceLogs().AppendEmpty()
-	ill := rl.InstrumentationLibraryLogs().AppendEmpty()
+	ill := rl.ScopeLogs().AppendEmpty()
 	ill.LogRecords().AppendEmpty()
 
 	return logs
@@ -499,13 +497,13 @@ type mockComponent struct {
 func newMockLogsExporter(consumelogsfn func(ctx context.Context, ld plog.Logs) error) component.LogsExporter {
 	return &mockLogsExporter{
 		Component:     mockComponent{},
-		consumelogsfn: consumelogsfn,
+		ConsumeLogsFn: consumelogsfn,
 	}
 }
 
 func newNopMockLogsExporter() component.LogsExporter {
 	return &mockLogsExporter{
-		Component: componenthelper.New(),
+		Component: mockComponent{},
 		ConsumeLogsFn: func(ctx context.Context, ld plog.Logs) error {
 			return nil
 		},

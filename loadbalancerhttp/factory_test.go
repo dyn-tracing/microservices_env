@@ -20,7 +20,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
 )
 
 func TestTracesExporterGetsCreatedWithValidConfiguration(t *testing.T) {
@@ -28,7 +27,6 @@ func TestTracesExporterGetsCreatedWithValidConfiguration(t *testing.T) {
 	factory := NewFactory()
 	creationParams := componenttest.NewNopExporterCreateSettings()
 	cfg := &Config{
-		ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
 		Resolver: ResolverSettings{
 			Static: &StaticResolver{Hostnames: []string{"endpoint-1"}},
 		},
@@ -47,7 +45,6 @@ func TestLogExporterGetsCreatedWithValidConfiguration(t *testing.T) {
 	factory := NewFactory()
 	creationParams := componenttest.NewNopExporterCreateSettings()
 	cfg := &Config{
-		ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
 		Resolver: ResolverSettings{
 			Static: &StaticResolver{Hostnames: []string{"endpoint-1"}},
 		},

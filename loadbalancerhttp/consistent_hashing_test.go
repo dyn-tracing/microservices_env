@@ -47,7 +47,7 @@ func TestEndpointFor(t *testing.T) {
 		{[]byte("ad-service-7"), "endpoint-1"},
 		{[]byte("get-recommendations-1"), "endpoint-2"},
 	} {
-		t.Run(fmt.Sprintf("Endpoint for traceID %s", tt.traceID.HexString()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Endpoint for traceID %s", string(tt.traceID)), func(t *testing.T) {
 			// test
 			endpoint := ring.endpointFor(tt.traceID)
 
