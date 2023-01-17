@@ -39,12 +39,12 @@ func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
 		typeStr,
 		createDefaultConfig,
-        component.WithTracesExporter(createTracesExporter, stability))
+        exporter.WithTraces(createTracesExporter, stability))
 }
 
 var exporters = map[*Config]*storageExporter{}
 
-func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *storageExporter {
+func ensureExporter(params exporter.CreateSettings, pCfg *Config) *storageExporter {
 	receiver := exporters[pCfg]
 	if receiver != nil {
 		return receiver
@@ -74,15 +74,15 @@ func createDefaultConfig() component.Config {
 
 func createTracesExporter(
 	ctx context.Context,
-	set component.ExporterCreateSettings,
-	cfg component.ExporterConfig) (component.TracesExporter, error) {
+	params exporter.CreateSettings,
+	cfg component.Config) (exporter.Traces, error) {
 
 	pCfg := cfg.(*Config)
-	storageExporter := ensureExporter(set, pCfg)
+	storageExporter := ensureExporter(params, pCfg)
 
 	return exporterhelper.NewTracesExporter(
         ctx,
-		set,
+		params,
         cfg,
 		storageExporter.consumeTraces,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),

@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/exporter/exportertest"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
@@ -37,7 +38,7 @@ func TestCreateTracesExporter(t *testing.T) {
 
 	te, err := factory.CreateTracesExporter(
 		context.Background(),
-		componenttest.NewNopExporterCreateSettings(),
+		exportertest.NewNopCreateSettings(),
 		eCfg,
 	)
 	assert.NoError(t, err)
@@ -50,7 +51,7 @@ func TestEnsureExporter(t *testing.T) {
 	eCfg := cfg.(*Config)
 	eCfg.Endpoint = "http://testing.invalid"
 
-	exporter1 := ensureExporter(componenttest.NewNopExporterCreateSettings(), eCfg)
-	exporter2 := ensureExporter(componenttest.NewNopExporterCreateSettings(), eCfg)
+	exporter1 := ensureExporter(exportertest.NewNopCreateSettings(), eCfg)
+	exporter2 := ensureExporter(exportertest.NewNopCreateSettings(), eCfg)
 	assert.Equal(t, exporter1, exporter2)
 }
