@@ -5,8 +5,8 @@ processors:
   nop:
 
 exporters:
-  googlecloudstorage:
   googlecloudstorage/customname:
+  googlecloudstorage:
     project: my-project
     endpoint: test-endpoint
     user_agent: opentelemetry-collector-contrib {{version}}
@@ -21,5 +21,5 @@ service:
     traces:
         receivers: [nop]
         processors: [nop]
-        exporters: [googlecloudstorage/customname]
+        exporters: [googlecloudstorage, googlecloudstorage/customname]
 
