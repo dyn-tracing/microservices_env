@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config"
+    "go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/consumer"
     "go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -35,8 +35,8 @@ const (
 )
 
 // NewFactory creates a factory for Google Cloud Storage exporter.
-func NewFactory() component.ExporterFactory {
-	return component.NewExporterFactory(
+func NewFactory() exporter.Factory {
+	return exporter.NewFactory(
 		typeStr,
 		createDefaultConfig,
         component.WithTracesExporter(createTracesExporter, stability))
@@ -63,9 +63,8 @@ func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *stor
 }
 
 // createDefaultConfig creates the default configuration for exporter.
-func createDefaultConfig() component.ExporterConfig {
+func createDefaultConfig() component.Config {
 	return &Config{
-		ExporterSettings: config.NewExporterSettings(component.NewID(typeStr)),
 		UserAgent:        "opentelemetry-collector-contrib {{version}}",
 		TimeoutSettings:  exporterhelper.TimeoutSettings{Timeout: defaultTimeout},
         RetrySettings:    exporterhelper.NewDefaultRetrySettings(),

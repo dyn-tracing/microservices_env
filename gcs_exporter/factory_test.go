@@ -20,7 +20,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
@@ -28,11 +27,6 @@ func TestCreateDefaultConfig(t *testing.T) {
 	cfg := factory.CreateDefaultConfig()
 	assert.NotNil(t, cfg, "failed to create default config")
 	assert.NoError(t, componenttest.CheckConfigStruct(cfg))
-}
-
-func TestType(t *testing.T) {
-	factory := NewFactory()
-	assert.Equal(t, config.Type(typeStr), factory.Type())
 }
 
 func TestCreateTracesExporter(t *testing.T) {

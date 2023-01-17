@@ -18,14 +18,14 @@ import (
 	"fmt"
 	"regexp"
 
-	"go.opentelemetry.io/collector/config"
+    "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
 var topicMatcher = regexp.MustCompile(`^projects/[a-z][a-z0-9\-]*/topics/`)
 
 type Config struct {
-	config.ExporterSettings `mapstructure:",squash"`
+	collector.Config `mapstructure:",squash"`
 	// Timeout for all API calls. If not set, defaults to 12 seconds.
 	exporterhelper.TimeoutSettings `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
 	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
@@ -47,11 +47,10 @@ type Config struct {
 }
 
 func (config *Config) Validate() error {
-	_, err := config.parseCompression()
-	if err != nil {
-		return err
+    if err := collector.ValidateConfig(config.Config); err != nil {
+		return fmt.Errorf("googlecloud exporter settings are invalid :%w", err)
 	}
-    return nil
+	return nil
 }
 
 func (config *Config) validate() error {

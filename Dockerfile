@@ -6,13 +6,13 @@ RUN apk update && apk upgrade && \
     apk add --no-cache bash git openssh
 RUN apk add gcc
 RUN apk add musl-dev
-RUN go mod download github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal@v0.66.0
+RUN go mod download github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal@v0.69.0
 COPY docker_builder.yaml docker_builder.yaml
 COPY ./loadbalancerhttp ./loadbalancerhttp
 COPY ./gcs_exporter ./gcs_exporter
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-RUN go install go.opentelemetry.io/collector/cmd/builder@v0.66.0
+RUN go install go.opentelemetry.io/collector/cmd/builder@v0.69.0
 
 USER root
 

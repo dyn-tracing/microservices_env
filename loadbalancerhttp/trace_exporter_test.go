@@ -511,14 +511,14 @@ type mockTracesExporter struct {
 
 func newMockTracesExporter(consumeTracesFn func(ctx context.Context, td pdata.Traces) error) component.TracesExporter {
 	return &mockTracesExporter{
-		Component:       mockComponent{}
+		Component:       mockComponent{},
 		ConsumeTracesFn: consumeTracesFn,
 	}
 }
 
 func newNopMockTracesExporter() component.TracesExporter {
 	return &mockTracesExporter{
-		Component: mockComponent{}
+		Component: mockComponent{},
 		ConsumeTracesFn: func(ctx context.Context, td pdata.Traces) error {
 			return nil
 		},
