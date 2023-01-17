@@ -30,7 +30,8 @@ import (
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.opentelemetry.io/collector/model/pdata"
+    "go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 )
 
@@ -241,8 +242,8 @@ func TestLogBatchWithTwoTraces(t *testing.T) {
 	defer p.Shutdown(context.Background())
 
 	first := simpleLogs()
-	second := simpleLogWithID(pdata.NewTraceID([16]byte{2, 3, 4, 5}))
-	batch := pdata.NewLogs()
+	second := simpleLogWithID(pcommon.TraceID([16]byte{2, 3, 4, 5}))
+	batch := plog.NewLogs()
 	firstTgt := batch.ResourceLogs().AppendEmpty()
 	first.ResourceLogs().At(0).CopyTo(firstTgt)
 	secondTgt := batch.ResourceLogs().AppendEmpty()
@@ -259,24 +260,24 @@ func TestLogBatchWithTwoTraces(t *testing.T) {
 func TestNoLogsInBatch(t *testing.T) {
 	for _, tt := range []struct {
 		desc  string
-		batch pdata.Logs
+		batch plog.Logs
 	}{
 		{
 			"no resource logs",
-			pdata.NewLogs(),
+			plog.NewLogs(),
 		},
 		{
 			"no instrumentation library logs",
-			func() pdata.Logs {
-				batch := pdata.NewLogs()
+			func() plog.Logs {
+				batch := plog.NewLogs()
 				batch.ResourceLogs().AppendEmpty()
 				return batch
 			}(),
 		},
 		{
 			"no logs",
-			func() pdata.Logs {
-				batch := pdata.NewLogs()
+			func() plog.Logs {
+				batch := plog.NewLogs()
 				batch.ResourceLogs().AppendEmpty().InstrumentationLibraryLogs().AppendEmpty()
 				return batch
 			}(),
@@ -284,7 +285,7 @@ func TestNoLogsInBatch(t *testing.T) {
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			res := traceIDFromLogs(tt.batch)
-			assert.Equal(t, pdata.InvalidTraceID(), res)
+			assert.Equal(t, pcommon.NewTraceIDEmpty(), res)
 		})
 	}
 }
@@ -386,14 +387,14 @@ func TestRollingUpdatesWhenConsumeLogs(t *testing.T) {
 
 	var counter1, counter2 int64
 	defaultExporters := map[string]component.Exporter{
-		"127.0.0.1": newMockLogsExporter(func(ctx context.Context, ld pdata.Logs) error {
+		"127.0.0.1": newMockLogsExporter(func(ctx context.Context, ld plog.Logs) error {
 			atomic.AddInt64(&counter1, 1)
 			// simulate an unreachable backend
 			time.Sleep(10 * time.Second)
 			return nil
 		},
 		),
-		"127.0.0.2": newMockLogsExporter(func(ctx context.Context, ld pdata.Logs) error {
+		"127.0.0.2": newMockLogsExporter(func(ctx context.Context, ld plog.Logs) error {
 			atomic.AddInt64(&counter2, 1)
 			return nil
 		},
@@ -448,16 +449,16 @@ func TestRollingUpdatesWhenConsumeLogs(t *testing.T) {
 	require.Greater(t, atomic.LoadInt64(&counter2), int64(0))
 }
 
-func randomLogs() pdata.Logs {
+func randomLogs() plog.Logs {
 	return simpleLogWithID(random())
 }
 
-func simpleLogs() pdata.Logs {
-	return simpleLogWithID(pdata.NewTraceID([16]byte{1, 2, 3, 4}))
+func simpleLogs() plog.Logs {
+	return simpleLogWithID(pcommon.TraceID([16]byte{1, 2, 3, 4}))
 }
 
-func simpleLogWithID(id pdata.TraceID) pdata.Logs {
-	logs := pdata.NewLogs()
+func simpleLogWithID(id pcommon.TraceID) plog.Logs {
+	logs := plog.NewLogs()
 	rl := logs.ResourceLogs().AppendEmpty()
 	ill := rl.InstrumentationLibraryLogs().AppendEmpty()
 	ill.LogRecords().AppendEmpty().SetTraceID(id)
@@ -465,8 +466,8 @@ func simpleLogWithID(id pdata.TraceID) pdata.Logs {
 	return logs
 }
 
-func simpleLogWithoutID() pdata.Logs {
-	logs := pdata.NewLogs()
+func simpleLogWithoutID() plog.Logs {
+	logs := plog.NewLogs()
 	rl := logs.ResourceLogs().AppendEmpty()
 	ill := rl.InstrumentationLibraryLogs().AppendEmpty()
 	ill.LogRecords().AppendEmpty()
@@ -476,14 +477,14 @@ func simpleLogWithoutID() pdata.Logs {
 
 type mockLogsExporter struct {
 	component.Component
-	ConsumeLogsFn func(ctx context.Context, ld pdata.Logs) error
+	ConsumeLogsFn func(ctx context.Context, ld plog.Logs) error
 }
 
 func (e *mockLogsExporter) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: false}
 }
 
-func (e *mockLogsExporter) ConsumeLogs(ctx context.Context, ld pdata.Logs) error {
+func (e *mockLogsExporter) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
 	if e.ConsumeLogsFn == nil {
 		return nil
 	}
@@ -505,7 +506,7 @@ func newMockLogsExporter(consumelogsfn func(ctx context.Context, ld plog.Logs) e
 func newNopMockLogsExporter() component.LogsExporter {
 	return &mockLogsExporter{
 		Component: componenthelper.New(),
-		ConsumeLogsFn: func(ctx context.Context, ld pdata.Logs) error {
+		ConsumeLogsFn: func(ctx context.Context, ld plog.Logs) error {
 			return nil
 		},
 	}

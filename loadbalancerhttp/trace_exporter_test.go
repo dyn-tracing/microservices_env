@@ -32,9 +32,11 @@ import (
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumertest"
+    "go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/service/servicetest"
+    "go.opentelemetry.io/collector/pdata/pcommon"
+    "go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
 )
 
@@ -282,6 +284,10 @@ func TestBuildExporterConfig(t *testing.T) {
 	assert.Equal(t, defaultCfg.RetrySettings, exporterCfg.RetrySettings)
 }
 
+func appendSimpleTraceWithID(dest ptrace.ResourceSpans, id pcommon.TraceID) {
+	dest.ScopeSpans().AppendEmpty().Spans().AppendEmpty().SetTraceID(id)
+}
+
 func TestBatchWithTwoTraces(t *testing.T) {
 	componentFactory := func(ctx context.Context, endpoint string) (component.Exporter, error) {
 		return newNopMockTracesExporter(), nil
@@ -300,14 +306,11 @@ func TestBatchWithTwoTraces(t *testing.T) {
 
     lb.addMissingExporters(context.Background(), []string{"endpoint-1"})
 
-	first := simpleTraces()
-	second := simpleTraceWithID(pdata.NewTraceID([16]byte{2, 3, 4, 5}))
-	batch := pdata.NewTraces()
-	first.ResourceSpans().MoveAndAppendTo(batch.ResourceSpans())
-	second.ResourceSpans().MoveAndAppendTo(batch.ResourceSpans())
+    td := simpleTraces()
+	appendSimpleTraceWithID(td.ResourceSpans().AppendEmpty(), [16]byte{2, 3, 4, 5})
 
 	// test
-	err = p.ConsumeTraces(context.Background(), batch)
+	err = p.ConsumeTraces(context.Background(), td)
 
 	// verify
 	assert.NoError(t, err)
@@ -477,21 +480,18 @@ func TestRollingUpdatesWhenConsumeTraces(t *testing.T) {
 	require.Greater(t, atomic.LoadInt64(&counter2), int64(0))
 }
 
-func randomTraces() pdata.Traces {
+func randomTraces() ptrace.Traces {
 	v1 := uint8(rand.Intn(256))
 	v2 := uint8(rand.Intn(256))
 	v3 := uint8(rand.Intn(256))
 	v4 := uint8(rand.Intn(256))
-	return simpleTraceWithID(pdata.NewTraceID([16]byte{v1, v2, v3, v4}))
+    traces := ptrace.NewTraces()
+	appendSimpleTraceWithID(traces.ResourceSpans().AppendEmpty(), [16]byte{v1, v2, v3, v4})
 }
 
-func simpleTraces() pdata.Traces {
-	return simpleTraceWithID(pdata.NewTraceID([16]byte{1, 2, 3, 4}))
-}
-
-func simpleTraceWithID(id pdata.TraceID) pdata.Traces {
-	traces := pdata.NewTraces()
-	traces.ResourceSpans().AppendEmpty().InstrumentationLibrarySpans().AppendEmpty().Spans().AppendEmpty().SetTraceID(id)
+func simpleTraces() ptrace.Traces {
+    traces := ptrace.NewTraces()
+	appendSimpleTraceWithID(traces.ResourceSpans().AppendEmpty(), [16]byte{1, 2, 3, 4})
 	return traces
 }
 
@@ -506,10 +506,10 @@ func simpleConfig() *Config {
 
 type mockTracesExporter struct {
 	component.Component
-	ConsumeTracesFn func(ctx context.Context, td pdata.Traces) error
+	ConsumeTracesFn func(ctx context.Context, td ptrace.Traces) error
 }
 
-func newMockTracesExporter(consumeTracesFn func(ctx context.Context, td pdata.Traces) error) component.TracesExporter {
+func newMockTracesExporter(consumeTracesFn func(ctx context.Context, td ptrace.Traces) error) exporter.Traces {
 	return &mockTracesExporter{
 		Component:       mockComponent{},
 		ConsumeTracesFn: consumeTracesFn,
@@ -529,7 +529,7 @@ func (e *mockTracesExporter) Capabilities() consumer.Capabilities {
 	return consumer.Capabilities{MutatesData: false}
 }
 
-func (e *mockTracesExporter) ConsumeTraces(ctx context.Context, td pdata.Traces) error {
+func (e *mockTracesExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
 	if e.ConsumeTracesFn == nil {
 		return nil
 	}

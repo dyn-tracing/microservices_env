@@ -25,6 +25,7 @@ import (
 	"go.opencensus.io/tag"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
     "go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -43,10 +44,10 @@ type logExporterImp struct {
 }
 
 // Create new logs exporter
-func newLogsExporter(params component.ExporterCreateSettings, cfg component.ExporterConfig) (*logExporterImp, error) {
+func newLogsExporter(params exporter.CreateSettings, cfg component.Config) (*logExporterImp, error) {
 	exporterFactory := otlphttpexporter.NewFactory()
 
-	lb, err := newLoadBalancer(params, cfg, func(ctx context.Context, endpoint string) (component.Exporter, error) {
+	lb, err := newLoadBalancer(params, cfg, func(ctx context.Context, endpoint string) (component.Component, error) {
 		oCfg := buildExporterConfig(cfg.(*Config), endpoint)
 		return exporterFactory.CreateLogsExporter(ctx, params, &oCfg)
 	})

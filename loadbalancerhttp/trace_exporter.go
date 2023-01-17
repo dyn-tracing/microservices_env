@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
     "go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/multierr"
@@ -51,10 +52,10 @@ type traceExporterImp struct {
 }
 
 // Create new traces exporter
-func newTracesExporter(params component.ExporterCreateSettings, cfg component.ExporterConfig, logger *zap.Logger) (*traceExporterImp, error) {
+func newTracesExporter(params exporter.CreateSettings, cfg component.Config, logger *zap.Logger) (*traceExporterImp, error) {
 	exporterFactory := otlphttpexporter.NewFactory()
 
-	lb, err := newLoadBalancer(params, cfg, func(ctx context.Context, endpoint string) (component.Exporter, error) {
+	lb, err := newLoadBalancer(params, cfg, func(ctx context.Context, endpoint string) (component.Component, error) {
 		oCfg := buildExporterConfig(cfg.(*Config), endpoint)
 		return exporterFactory.CreateTracesExporter(ctx, params, &oCfg)
 	})
@@ -159,7 +160,7 @@ func (e *traceExporterImp) ConsumeTraces(ctx context.Context, td ptrace.Traces) 
 }
 
 func (e *traceExporterImp) consumeTrace(ctx context.Context, td ptrace.Traces) error {
-    var exp component.Exporter
+    var exp component.Component
 	routingIds, err := routingIdentifiersFromTraces(td, e.routingKey)
 	if err != nil {
 		return err
