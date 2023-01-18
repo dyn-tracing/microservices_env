@@ -714,7 +714,7 @@ func writeMicroserviceToHashMappingWorker(ctx context.Context, hash int, client 
         service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
         _, err := service_obj.Attrs(ctx)
         if err == storage.ErrObjectNotExist {
-            service_writer := service_obj.If(storage.Conditions{GenerationMatch: 0}).NewWriter(ctx)
+            service_writer := service_obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
             if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
                 println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
                     strconv.FormatUint(uint64(hash), 10), err))
