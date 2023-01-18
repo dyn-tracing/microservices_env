@@ -884,15 +884,15 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
 	}
     //fmt.Println("time to send trace struct buffer: ", time.Since(computed_time))
 
-    //before_hash_mapping_time := time.Now()
+    before_hash_mapping_time := time.Now()
 
 	// 3. Put the hash to trace ID mapping in storage
     sendHashToTraceIDMapping(ctx, hashToTraceID, batch_name, client)
-    //fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
+    fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
 
-    //last_time := time.Now()
+    last_time := time.Now()
     numHashExemplars := writeHashExemplarsAndHashByMicroservice(ctx, hashToStructure, hashToServices, batch_name, client)
-    //fmt.Println("time to write hash exemplars: ", time.Since(last_time))
+    fmt.Println("time to write hash exemplars: ", time.Since(last_time))
 
 	return nil, numHashExemplars
 }
