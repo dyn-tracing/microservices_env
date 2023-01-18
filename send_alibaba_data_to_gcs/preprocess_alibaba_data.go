@@ -769,7 +769,7 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
             inner_jobs := make(chan string, numJobs)
             inner_results := make(chan int, numJobs)
 
-            numWorkers := 20
+            numWorkers := 3
             for w := 1; w <= numWorkers; w++ {
                 go writeMicroserviceToHashMappingWorker(ctx, hash, client, inner_jobs, inner_results)
             }
@@ -795,7 +795,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 30
+    numWorkers := 100
 
     for w := 1; w <= numWorkers; w++ {
         go writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, client, jobs, results)
