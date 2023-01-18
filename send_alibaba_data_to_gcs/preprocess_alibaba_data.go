@@ -477,7 +477,7 @@ func serviceNameToBucketName(service string, suffix string) string {
 func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.Client) {
     // check this
     var wg sync.WaitGroup
-    wg.Add(4)
+    wg.Add(5)
 	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
         spanBucketExists(ctx, TraceBucket, false, client)
         wg.Done()
@@ -492,6 +492,10 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
     }(ctx, client, &wg)
 	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
         spanBucketExists(ctx, ListBucket, false, client)
+        wg.Done()
+    }(ctx, client, &wg)
+	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
+        spanBucketExists(ctx, HashesByServiceBucket, false, client)
         wg.Done()
     }(ctx, client, &wg)
 
@@ -703,8 +707,10 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
 }
 
 func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
-    batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
+    hashToServices map[int][]string, batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
 	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
+	service_bkt := client.Bucket(serviceNameToBucketName(HashesByServiceBucket, BucketSuffix))
+	emptyBuf := dataBuffer{}
     for hash := range jobs {
         structure := hashToStructure[hash]
 		// 1. Does object exist?
@@ -724,6 +730,23 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
 
 				log.Fatal(err)
 			}
+            // 3. Then, create microservice -> hash mapping for this hash
+            for _, service := range hashToServices[hash] {
+                service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
+                service_writer := service_obj.NewWriter(ctx)
+                if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
+				    println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
+                        strconv.FormatUint(uint64(hash), 10), err))
+                    println("error: ", err.Error())
+                }
+                if err := service_writer.Close(); err != nil {
+				    println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
+                        strconv.FormatUint(uint64(hash), 10), err))
+                    println("error: ", err.Error())
+                }
+            }
+
+
             // Results counts how many new exemplars
             results <- 1
 		} else {
@@ -732,8 +755,8 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
     }
 }
 
-func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
-    batch_name string, client *storage.Client) int {
+func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructure map[int]dataBuffer,
+    hashToServices map[int][]string, batch_name string, client *storage.Client) int {
     numJobs := len(hashToStructure)
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
@@ -741,7 +764,7 @@ func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
     numWorkers := 100
 
     for w := 1; w <= numWorkers; w++ {
-        go writeHashExemplarsWorker(ctx, hashToStructure, batch_name, client, jobs, results)
+        go writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, client, jobs, results)
     }
 
     for hash, _ := range hashToStructure {
@@ -834,7 +857,7 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
     //fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
 
     //last_time := time.Now()
-    numHashExemplars := writeHashExemplars(ctx, hashToStructure, batch_name, client)
+    numHashExemplars := writeHashExemplarsAndHashByMicroservice(ctx, hashToStructure, hashToServices, batch_name, client)
     //fmt.Println("time to write hash exemplars: ", time.Since(last_time))
 
 	return nil, numHashExemplars
