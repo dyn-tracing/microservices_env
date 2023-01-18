@@ -712,33 +712,30 @@ func writeMicroserviceToHashMappingWorker(ctx context.Context, hash int, client 
 	emptyBuf := dataBuffer{}
     for service := range jobs {
         service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
-        _, err := service_obj.Attrs(ctx)
-        if err == storage.ErrObjectNotExist {
-            service_writer := service_obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
-            if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
-                println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
-                    strconv.FormatUint(uint64(hash), 10), err))
-                println("failed in writing")
-                println("error: ", err.Error())
-            }
-            if err := service_writer.Close(); err != nil {
-                switch e := err.(type) {
-                    case *googleapi.Error:
-                        if e.Code == http.StatusPreconditionFailed {
-                            // Don't do anything
-                        } else {
-                            println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
-                                strconv.FormatUint(uint64(hash), 10), err))
-                            println("failed in closing")
-                            println("error: ", err.Error())
-
-                        }
-                    default:
+        service_writer := service_obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+        if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
+            println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
+                strconv.FormatUint(uint64(hash), 10), err))
+            println("failed in writing")
+            println("error: ", err.Error())
+        }
+        if err := service_writer.Close(); err != nil {
+            switch e := err.(type) {
+                case *googleapi.Error:
+                    if e.Code == http.StatusPreconditionFailed {
+                        // Don't do anything
+                    } else {
                         println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
                             strconv.FormatUint(uint64(hash), 10), err))
                         println("failed in closing")
                         println("error: ", err.Error())
-                }
+
+                    }
+                default:
+                    println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
+                        strconv.FormatUint(uint64(hash), 10), err))
+                    println("failed in closing")
+                    println("error: ", err.Error())
             }
         }
     }
@@ -798,7 +795,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 100
+    numWorkers := 30
 
     for w := 1; w <= numWorkers; w++ {
         go writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, client, jobs, results)
