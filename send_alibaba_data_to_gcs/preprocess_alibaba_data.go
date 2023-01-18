@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test3"
+	BucketSuffix            = "-quest-test5"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -795,7 +795,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 50
+    numWorkers := 30
 
     for w := 1; w <= numWorkers; w++ {
         go writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, client, jobs, results)
@@ -810,7 +810,9 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     totalNew := 0
     for a := 1; a <= numJobs; a++ {
         totalNew += <-results
-	println("a is", a, "and I need to get to numJobs: ", numJobs)
+	if a%100 == 0 {
+		println("a is", a, "and I need to get to numJobs: ", numJobs)
+	}
     }
     println("done with hash exemplars worker jobs")
     return totalNew
