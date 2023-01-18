@@ -746,6 +746,9 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
                             strconv.FormatUint(uint64(hash), 10), err))
                         println("error: ", err.Error())
                     }
+                } else {
+                    // This is your signal to quit - someone else is already calculating this
+                    break;
                 }
             }
 
