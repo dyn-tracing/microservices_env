@@ -718,11 +718,13 @@ func writeMicroserviceToHashMappingWorker(ctx context.Context, hash int, client 
             if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
                 println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
                     strconv.FormatUint(uint64(hash), 10), err))
+                println("failed in writing")
                 println("error: ", err.Error())
             }
             if err := service_writer.Close(); err != nil {
                 println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
                     strconv.FormatUint(uint64(hash), 10), err))
+                println("failed in closing")
                 println("error: ", err.Error())
             }
         }
