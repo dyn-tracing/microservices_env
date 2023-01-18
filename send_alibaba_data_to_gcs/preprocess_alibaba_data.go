@@ -722,10 +722,23 @@ func writeMicroserviceToHashMappingWorker(ctx context.Context, hash int, client 
                 println("error: ", err.Error())
             }
             if err := service_writer.Close(); err != nil {
-                println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
-                    strconv.FormatUint(uint64(hash), 10), err))
-                println("failed in closing")
-                println("error: ", err.Error())
+                switch e := err.(type) {
+                    case *googleapi.Error:
+                        if e.Code == http.StatusPreconditionFailed {
+                            // Don't do anything
+                        } else {
+                            println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
+                                strconv.FormatUint(uint64(hash), 10), err))
+                            println("failed in closing")
+                            println("error: ", err.Error())
+
+                        }
+                    default:
+                        println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
+                            strconv.FormatUint(uint64(hash), 10), err))
+                        println("failed in closing")
+                        println("error: ", err.Error())
+                }
             }
         }
     }
