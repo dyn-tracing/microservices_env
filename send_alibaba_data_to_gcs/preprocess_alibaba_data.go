@@ -836,6 +836,7 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
             for i :=0; i < len(sp); i++ {
                 services = append(services, sp[i].service)
             }
+            sort.Sort(sort.StringSlice(services))
             hashToServices[hash] = services
 		}
 	}
