@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test4"
+	BucketSuffix            = "-quest-test"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -733,16 +733,19 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
             // 3. Then, create microservice -> hash mapping for this hash
             for _, service := range hashToServices[hash] {
                 service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
-                service_writer := service_obj.NewWriter(ctx)
-                if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
-				    println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
-                        strconv.FormatUint(uint64(hash), 10), err))
-                    println("error: ", err.Error())
-                }
-                if err := service_writer.Close(); err != nil {
-				    println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
-                        strconv.FormatUint(uint64(hash), 10), err))
-                    println("error: ", err.Error())
+                _, err := service_obj.Attrs(ctx)
+                if err == storage.ErrObjectNotExist {
+                    service_writer := service_obj.NewWriter(ctx)
+                    if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
+                        println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
+                            strconv.FormatUint(uint64(hash), 10), err))
+                        println("error: ", err.Error())
+                    }
+                    if err := service_writer.Close(); err != nil {
+                        println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
+                            strconv.FormatUint(uint64(hash), 10), err))
+                        println("error: ", err.Error())
+                    }
                 }
             }
 
