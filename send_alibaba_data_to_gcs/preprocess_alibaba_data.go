@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test16"
+	BucketSuffix            = "-quest-batched-index"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -782,9 +782,6 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     totalNew := 0
     objectsToWrite := make(map[string][]int)
     for a := 1; a <= numJobs; a++ {
-	    if a%100 == 0 {
-		    println("a is ", a, " and numJobs is ", numJobs)
-	    }
         result := <-results
         if result != 0 {
             totalNew += 1
@@ -793,8 +790,6 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
             }
         }
     }
-
-    println("done with writing exemplars, now writing hashes by microservice")
 
     // Now create all the hash objects
     hashNumJobs := len(objectsToWrite)
@@ -811,9 +806,6 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     }
     close(hashJobs)
     for a := 1; a <= hashNumJobs; a++ {
-	    if a%100 == 0 {
-		    println("a is ", a, " and hashNumJobs is ", hashNumJobs)
-	    }
         <-hashResults
     }
     return totalNew
