@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test"
+	BucketSuffix            = "-quest-test14"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -558,7 +558,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
     jobs := make(chan string, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 150;
+    numWorkers := 20;
     for w := 1; w <= numWorkers; w++ {
         go sendBatchSpansWorker(ctx, resourceNameToSpans, batch_name, client, jobs, results)
     }
@@ -688,7 +688,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 100
+    numWorkers := 30
 
     for w := 1; w <= numWorkers; w++ {
         go sendTraceIDsForHashWorker(ctx, hashToTraceID, batch_name, client, jobs, results)
@@ -764,7 +764,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 100
+    numWorkers := 50
 
     for w := 1; w <= numWorkers; w++ {
         go writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, client, jobs, results)
@@ -777,6 +777,9 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
 
     totalNew := 0
     for a := 1; a <= numJobs; a++ {
+	    if a%100 == 0 {
+		println("a is ", a, " and numJobs is ", numJobs)
+	    }
         totalNew += <-results
     }
     return totalNew
@@ -859,9 +862,9 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
     sendHashToTraceIDMapping(ctx, hashToTraceID, batch_name, client)
     //fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
 
-    //last_time := time.Now()
+    last_time := time.Now()
     numHashExemplars := writeHashExemplarsAndHashByMicroservice(ctx, hashToStructure, hashToServices, batch_name, client)
-    //fmt.Println("time to write hash exemplars: ", time.Since(last_time))
+    fmt.Println("time to write hash exemplars: ", time.Since(last_time))
 
 	return nil, numHashExemplars
 }
@@ -979,7 +982,16 @@ func process_file(filename string) Exempted {
     var wg sync.WaitGroup
 	j := 0
 
-    newHashesChannels := make(chan int, len(pdataTraces))
+	numBatches := 0
+	for j < len(pdataTraces) {
+		start := j
+		end := start + BatchSize
+		if end >= len(pdataTraces) {
+			end = len(pdataTraces)
+		}
+		numBatches += 1
+	}
+    newHashesChannels := make(chan int, numBatches)
 
 	for j < len(pdataTraces) {
 		start := j
@@ -1016,7 +1028,8 @@ func process_file(filename string) Exempted {
     wg.Wait()
     close(newHashesChannels)
     totalNewHashes := 0
-    for i := 0; i< len(pdataTraces); i++ {
+    for i := 0; i< numBatches; i++ {
+	    println("total new hashes updated, i is ", i)
         totalNewHashes += <-newHashesChannels
     }
     println("total new hashes: ", totalNewHashes)
