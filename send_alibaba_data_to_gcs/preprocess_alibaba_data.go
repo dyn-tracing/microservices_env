@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test6"
+	BucketSuffix            = "-quest-test1"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -559,7 +559,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
     jobs := make(chan string, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 100;
+    numWorkers := 30;
     for w := 1; w <= numWorkers; w++ {
         go sendBatchSpansWorker(ctx, resourceNameToSpans, batch_name, client, jobs, results)
     }
@@ -690,7 +690,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 70
+    numWorkers := 30
 
     for w := 1; w <= numWorkers; w++ {
         go sendTraceIDsForHashWorker(ctx, hashToTraceID, batch_name, client, jobs, results)
