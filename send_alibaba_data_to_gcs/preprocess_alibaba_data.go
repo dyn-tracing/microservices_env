@@ -707,14 +707,17 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
 }
 
 func writeMicroserviceToHashMappingWorker(ctx context.Context, client *storage.Client,
-    jobs <-chan string, results chan<- int) {
+    batch_name string, objectsToWrite map[string][]int, jobs <-chan string, results chan<- int) {
 
 	service_bkt := client.Bucket(serviceNameToBucketName(HashesByServiceBucket, BucketSuffix))
-	emptyBuf := dataBuffer{}
-    for objname := range jobs {
-        service_obj := service_bkt.Object(objname)
+	hashesBuf := dataBuffer{}
+    for service := range jobs {
+        for _, hash := range objectsToWrite[service] {
+		    hashesBuf.logEntry(strconv.FormatUint(uint64(hash), 10) + "\n")
+        }
+        service_obj := service_bkt.Object(service + "/" + batch_name)
         service_writer := service_obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
-        if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
+        if _, err := service_writer.Write(hashesBuf.buf.Bytes()); err != nil {
             println("error in writeMicroserviceToHashMappingWorker: ", err.Error())
         }
         if err := service_writer.Close(); err != nil {
@@ -777,7 +780,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     close(jobs)
 
     totalNew := 0
-    objectsToWrite := make([]string, 0)
+    objectsToWrite := make(map[string][]int)
     for a := 1; a <= numJobs; a++ {
 	    if a%100 == 0 {
 		    println("a is ", a, " and numJobs is ", numJobs)
@@ -786,7 +789,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
         if result != 0 {
             totalNew += 1
             for _, service := range hashToServices[result] {
-                objectsToWrite = append(objectsToWrite, strconv.FormatUint(uint64(result), 10)+"/"+service)
+                objectsToWrite[service] = append(objectsToWrite[service], result)
             }
         }
     }
@@ -801,10 +804,10 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     numWorkers = 50
 
     for w := 1; w <= numWorkers; w++ {
-        go writeMicroserviceToHashMappingWorker(ctx, client, hashJobs, hashResults)
+        go writeMicroserviceToHashMappingWorker(ctx, client, batch_name, objectsToWrite, hashJobs, hashResults)
     }
-    for _, objectName := range objectsToWrite {
-        hashJobs <- objectName
+    for service, _ := range objectsToWrite {
+        hashJobs <- service
     }
     close(hashJobs)
     for a := 1; a <= hashNumJobs; a++ {
