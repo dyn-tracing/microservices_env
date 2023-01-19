@@ -706,6 +706,29 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     //fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(computed_time))
 }
 
+func writeMicroserviceToHashMappingWorker(ctx context.Context, hash int, client *storage.Client,
+    jobs <-chan string, results chan<- int) {
+	service_bkt := client.Bucket(serviceNameToBucketName(HashesByServiceBucket, BucketSuffix))
+	emptyBuf := dataBuffer{}
+    for service := range jobs {
+        service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
+        _, err := service_obj.Attrs(ctx)
+        if err == storage.ErrObjectNotExist {
+            service_writer := service_obj.NewWriter(ctx)
+            if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
+                println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
+                    strconv.FormatUint(uint64(hash), 10), err))
+                println("error: ", err.Error())
+            }
+            if err := service_writer.Close(); err != nil {
+                println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
+                    strconv.FormatUint(uint64(hash), 10), err))
+                println("error: ", err.Error())
+            }
+        }
+        results <- 1
+    }
+}
 func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
     hashToServices map[int][]string, batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
 	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
@@ -731,26 +754,44 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
 				log.Fatal(err)
 			}
             // 3. Then, create microservice -> hash mapping for this hash
-            for _, service := range hashToServices[hash] {
-                service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
-                _, err := service_obj.Attrs(ctx)
-                if err == storage.ErrObjectNotExist {
-                    service_writer := service_obj.NewWriter(ctx)
-                    if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
-                        println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
-                            strconv.FormatUint(uint64(hash), 10), err))
-                        println("error: ", err.Error())
-                    }
-                    if err := service_writer.Close(); err != nil {
-                        println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
-                            strconv.FormatUint(uint64(hash), 10), err))
-                        println("error: ", err.Error())
+            // Only parallelize where you really need it, at arbitrary cutoff of 500.
+            // Before that, you don't really need it - parallelization overhead is too much.
+            if len(hashToServices[hash]) < 500 {
+                for _, service := range hashToServices[hash] {
+                    service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
+                    _, err := service_obj.Attrs(ctx)
+                    if err == storage.ErrObjectNotExist {
+                        service_writer := service_obj.NewWriter(ctx)
+                        if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
+                            println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
+                                strconv.FormatUint(uint64(hash), 10), err))
+                            println("error: ", err.Error())
+                        }
+                        if err := service_writer.Close(); err != nil {
+                            println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
+                                strconv.FormatUint(uint64(hash), 10), err))
+                            println("error: ", err.Error())
+                        }
                     }
                 }
+            } else {
+                // If it's a giant trace, just parallelize
+                numJobs := len(hashToServices[hash])
+                inner_jobs := make(chan string, numJobs)
+                inner_results := make(chan int, numJobs)
+
+                numWorkers := 50
+                for w := 1; w <= numWorkers; w++ {
+                    go writeMicroserviceToHashMappingWorker(ctx, hash, client, inner_jobs, inner_results)
+                }
+                for _, service := range hashToServices[hash] {
+                    inner_jobs <- service
+                }
+                close(inner_jobs)
+                for a := 1; a <= numJobs; a ++ {
+                    <-inner_results
+                }
             }
-
-
-            // Results counts how many new exemplars
             results <- 1
 		} else {
             results <- 0
