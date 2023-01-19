@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test5"
+	BucketSuffix            = "-quest-test3"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -552,13 +552,14 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
 		}
 	}
 
+    	start_time := time.Now()
 
 	// 3. Send each resource's spans to storage
     numJobs := len(resourceNameToSpans)
     jobs := make(chan string, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 150;
+    numWorkers := 100;
     for w := 1; w <= numWorkers; w++ {
         go sendBatchSpansWorker(ctx, resourceNameToSpans, batch_name, client, jobs, results)
     }
@@ -570,6 +571,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
     for a := 1; a <= numJobs; a++ {
         <-results
     }
+    		fmt.Println("time to send batch spans to storage: ", time.Since(start_time))
 	return nil
 }
 
@@ -688,7 +690,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 100
+    numWorkers := 70
 
     for w := 1; w <= numWorkers; w++ {
         go sendTraceIDsForHashWorker(ctx, hashToTraceID, batch_name, client, jobs, results)
@@ -746,6 +748,7 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
     hashToServices map[int][]string, batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
 	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
     for hash := range jobs {
+    	//start_time := time.Now()
         structure := hashToStructure[hash]
 		// 1. Does object exist?
 		obj := list_bkt.Object(strconv.FormatUint(uint64(hash), 10))
@@ -765,11 +768,15 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
 				log.Fatal(err)
 			}
             // 3. Then, create microservice -> hash mapping for this hash
+    		//time_for_jobs := time.Now()
             numJobs := len(hashToServices[hash])
             inner_jobs := make(chan string, numJobs)
             inner_results := make(chan int, numJobs)
 
-            numWorkers := 3
+            numWorkers := 1
+	    if numJobs < numWorkers {
+		numWorkers = numJobs
+	    }
             for w := 1; w <= numWorkers; w++ {
                 go writeMicroserviceToHashMappingWorker(ctx, hash, client, inner_jobs, inner_results)
             }
@@ -780,6 +787,8 @@ func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataB
             for a := 1; a <= numJobs; a ++ {
                 <-inner_results
             }
+    		//fmt.Println("time send oen new hash: ", time.Since(start_time))
+    		//fmt.Println("time send microservice info in parallel: ", time.Since(time_for_jobs), " and numJobs is ", numJobs)
 
             // Results counts how many new exemplars
             results <- 1
@@ -795,7 +804,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 30
+    numWorkers := 50
 
     for w := 1; w <= numWorkers; w++ {
         go writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, client, jobs, results)
@@ -804,7 +813,7 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     for hash, _ := range hashToStructure {
         jobs <- hash
     }
-    close(jobs)
+   close(jobs)
     println("closed hash exemplars worker jobs")
 
     totalNew := 0
