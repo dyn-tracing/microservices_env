@@ -706,95 +706,55 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     //fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(computed_time))
 }
 
-func writeMicroserviceToHashMappingWorker(ctx context.Context, hash int, client *storage.Client,
+func writeMicroserviceToHashMappingWorker(ctx context.Context, client *storage.Client,
     jobs <-chan string, results chan<- int) {
+
 	service_bkt := client.Bucket(serviceNameToBucketName(HashesByServiceBucket, BucketSuffix))
 	emptyBuf := dataBuffer{}
-    for service := range jobs {
-        service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
-        _, err := service_obj.Attrs(ctx)
-        if err == storage.ErrObjectNotExist {
-            service_writer := service_obj.NewWriter(ctx)
-            if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
-                println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
-                    strconv.FormatUint(uint64(hash), 10), err))
-                println("error: ", err.Error())
-            }
-            if err := service_writer.Close(); err != nil {
-                println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
-                    strconv.FormatUint(uint64(hash), 10), err))
-                println("error: ", err.Error())
+    for objname := range jobs {
+        service_obj := service_bkt.Object(objname)
+        service_writer := service_obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+        if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
+            println("error in writeMicroserviceToHashMappingWorker: ", err.Error())
+        }
+        if err := service_writer.Close(); err != nil {
+			var e *googleapi.Error
+			if ok := errors.As(err, &e); ok {
+				if e.Code == 412 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+				} else {
+                    println("error in closing in writeMicroserviceToHashMappingWorker: ", err.Error())
+				}
             }
         }
         results <- 1
     }
 }
+
+// Results here is either empty string (this isn't a new hash, someone else got
+// there first), or it is the string of the new hash
 func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
     hashToServices map[int][]string, batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
 	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
-	service_bkt := client.Bucket(serviceNameToBucketName(HashesByServiceBucket, BucketSuffix))
-	emptyBuf := dataBuffer{}
     for hash := range jobs {
         structure := hashToStructure[hash]
-		// 1. Does object exist?
 		obj := list_bkt.Object(strconv.FormatUint(uint64(hash), 10))
-		_, err := obj.Attrs(ctx)
-		if err == storage.ErrObjectNotExist {
-			// 2. If doesn't exist, create it
-			w_list := obj.NewWriter(ctx)
-			if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
-				println(fmt.Errorf("failed creating the list object: %w", err))
-				println("error: ", err.Error())
-			}
-			if err := w_list.Close(); err != nil {
-				println(fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err))
-				println("error2: ", err.Error())
-				fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err)
-
-				log.Fatal(err)
-			}
-            // 3. Then, create microservice -> hash mapping for this hash
-            // Only parallelize where you really need it, at arbitrary cutoff of 500.
-            // Before that, you don't really need it - parallelization overhead is too much.
-            if len(hashToServices[hash]) < 500 {
-                for _, service := range hashToServices[hash] {
-                    service_obj := service_bkt.Object(service + "/" + strconv.FormatUint(uint64(hash), 10))
-                    _, err := service_obj.Attrs(ctx)
-                    if err == storage.ErrObjectNotExist {
-                        service_writer := service_obj.NewWriter(ctx)
-                        if _, err := service_writer.Write(emptyBuf.buf.Bytes()); err != nil {
-                            println(fmt.Errorf("failed writing the hash by service object in bucket %s: %w",
-                                strconv.FormatUint(uint64(hash), 10), err))
-                            println("error: ", err.Error())
-                        }
-                        if err := service_writer.Close(); err != nil {
-                            println(fmt.Errorf("failed closing the hash by service object in bucket %s: %w",
-                                strconv.FormatUint(uint64(hash), 10), err))
-                            println("error: ", err.Error())
-                        }
-                    }
-                }
-            } else {
-                // If it's a giant trace, just parallelize
-                numJobs := len(hashToServices[hash])
-                inner_jobs := make(chan string, numJobs)
-                inner_results := make(chan int, numJobs)
-
-                numWorkers := 50
-                for w := 1; w <= numWorkers; w++ {
-                    go writeMicroserviceToHashMappingWorker(ctx, hash, client, inner_jobs, inner_results)
-                }
-                for _, service := range hashToServices[hash] {
-                    inner_jobs <- service
-                }
-                close(inner_jobs)
-                for a := 1; a <= numJobs; a ++ {
-                    <-inner_results
-                }
+        w_list := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+        if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
+            println(fmt.Errorf("failed creating the list object: %w", err))
+            println("error: ", err.Error())
+        }
+        if err := w_list.Close(); err != nil {
+			var e *googleapi.Error
+			if ok := errors.As(err, &e); ok {
+				if e.Code == 412 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+                    results <- 0
+				} else {
+                    println("error: ", err.Error())
+                    results <- hash
+				}
             }
-            results <- 1
-		} else {
-            results <- 0
+        } else {
+            results <- hash
         }
     }
 }
@@ -817,11 +777,41 @@ func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructur
     close(jobs)
 
     totalNew := 0
+    objectsToWrite := make([]string, 0)
     for a := 1; a <= numJobs; a++ {
 	    if a%100 == 0 {
-		println("a is ", a, " and numJobs is ", numJobs)
+		    println("a is ", a, " and numJobs is ", numJobs)
 	    }
-        totalNew += <-results
+        result := <-results
+        if result != 0 {
+            totalNew += 1
+            for _, service := range hashToServices[result] {
+                objectsToWrite = append(objectsToWrite, strconv.FormatUint(uint64(result), 10)+"/"+service)
+            }
+        }
+    }
+
+    println("done with writing exemplars, now writing hashes by microservice")
+
+    // Now create all the hash objects
+    hashNumJobs := len(objectsToWrite)
+    hashJobs := make(chan string, hashNumJobs)
+    hashResults := make(chan int, hashNumJobs)
+
+    numWorkers = 50
+
+    for w := 1; w <= numWorkers; w++ {
+        go writeMicroserviceToHashMappingWorker(ctx, client, hashJobs, hashResults)
+    }
+    for _, objectName := range objectsToWrite {
+        hashJobs <- objectName
+    }
+    close(hashJobs)
+    for a := 1; a <= hashNumJobs; a++ {
+	    if a%100 == 0 {
+		    println("a is ", a, " and hashNumJobs is ", hashNumJobs)
+	    }
+        <-hashResults
     }
     return totalNew
 }
