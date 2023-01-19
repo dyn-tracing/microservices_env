@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test14"
+	BucketSuffix            = "-quest-test16"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -990,7 +990,9 @@ func process_file(filename string) Exempted {
 			end = len(pdataTraces)
 		}
 		numBatches += 1
+		j += BatchSize
 	}
+	j = 0
     newHashesChannels := make(chan int, numBatches)
 
 	for j < len(pdataTraces) {
@@ -1025,7 +1027,9 @@ func process_file(filename string) Exempted {
         }(ctx, pdataTraces, batch_name, client, start, end, &wg)
 		j += BatchSize
 	}
+	println("waiting on biggest waitgroup")
     wg.Wait()
+	println("done waiting on biggest waitgroup")
     close(newHashesChannels)
     totalNewHashes := 0
     for i := 0; i< numBatches; i++ {
