@@ -34,7 +34,7 @@ const (
 	ListBucket              = "list-hashes"
     HashesByServiceBucket   = "hashes-by-service"
 	PrimeNumber             = 97
-	BucketSuffix            = "-quest-test4"
+	BucketSuffix            = "-quest-batched-index"
 	MicroserviceNameMapping = "names.csv"
 	AnimalJSON              = "animals.csv"
 	ColorsJSON              = "color_names.csv"
@@ -477,7 +477,7 @@ func serviceNameToBucketName(service string, suffix string) string {
 func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.Client) {
     // check this
     var wg sync.WaitGroup
-    wg.Add(4)
+    wg.Add(5)
 	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
         spanBucketExists(ctx, TraceBucket, false, client)
         wg.Done()
@@ -492,6 +492,10 @@ func createBuckets(ctx context.Context, traces []TimeWithTrace, client *storage.
     }(ctx, client, &wg)
 	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
         spanBucketExists(ctx, ListBucket, false, client)
+        wg.Done()
+    }(ctx, client, &wg)
+	go func(ctx context.Context, client *storage.Client, wg *sync.WaitGroup){
+        spanBucketExists(ctx, HashesByServiceBucket, false, client)
         wg.Done()
     }(ctx, client, &wg)
 
@@ -554,7 +558,7 @@ func sendBatchSpansToStorage(ctx context.Context, traces []TimeWithTrace, batch_
     jobs := make(chan string, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 150;
+    numWorkers := 20;
     for w := 1; w <= numWorkers; w++ {
         go sendBatchSpansWorker(ctx, resourceNameToSpans, batch_name, client, jobs, results)
     }
@@ -684,7 +688,7 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 100
+    numWorkers := 30
 
     for w := 1; w <= numWorkers; w++ {
         go sendTraceIDsForHashWorker(ctx, hashToTraceID, batch_name, client, jobs, results)
@@ -702,46 +706,72 @@ func sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]strin
     //fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(computed_time))
 }
 
+func writeMicroserviceToHashMappingWorker(ctx context.Context, client *storage.Client,
+    batch_name string, objectsToWrite map[string][]int, jobs <-chan string, results chan<- int) {
+
+	service_bkt := client.Bucket(serviceNameToBucketName(HashesByServiceBucket, BucketSuffix))
+	hashesBuf := dataBuffer{}
+    for service := range jobs {
+        for _, hash := range objectsToWrite[service] {
+		    hashesBuf.logEntry(strconv.FormatUint(uint64(hash), 10) + "\n")
+        }
+        service_obj := service_bkt.Object(service + "/" + batch_name)
+        service_writer := service_obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+        if _, err := service_writer.Write(hashesBuf.buf.Bytes()); err != nil {
+            println("error in writeMicroserviceToHashMappingWorker: ", err.Error())
+        }
+        if err := service_writer.Close(); err != nil {
+			var e *googleapi.Error
+			if ok := errors.As(err, &e); ok {
+				if e.Code == 412 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+				} else {
+                    println("error in closing in writeMicroserviceToHashMappingWorker: ", err.Error())
+				}
+            }
+        }
+        results <- 1
+    }
+}
+
+// Results here is either empty string (this isn't a new hash, someone else got
+// there first), or it is the string of the new hash
 func writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
-    batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
+    hashToServices map[int][]string, batch_name string, client *storage.Client, jobs <-chan int, results chan<- int) {
 	list_bkt := client.Bucket(serviceNameToBucketName(ListBucket, BucketSuffix))
     for hash := range jobs {
         structure := hashToStructure[hash]
-		// 1. Does object exist?
 		obj := list_bkt.Object(strconv.FormatUint(uint64(hash), 10))
-		_, err := obj.Attrs(ctx)
-		if err == storage.ErrObjectNotExist {
-			// 2. If doesn't exist, create it
-			w_list := obj.NewWriter(ctx)
-			if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
-				println(fmt.Errorf("failed creating the list object: %w", err))
-				println("error: ", err.Error())
-			}
-			if err := w_list.Close(); err != nil {
-				println(fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err))
-				println("error2: ", err.Error())
-				fmt.Errorf("failed closing the list hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10), err)
-
-				log.Fatal(err)
-			}
-            // Results counts how many new exemplars
-            results <- 1
-		} else {
-            results <- 0
+        w_list := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+        if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
+            println(fmt.Errorf("failed creating the list object: %w", err))
+            println("error: ", err.Error())
+        }
+        if err := w_list.Close(); err != nil {
+			var e *googleapi.Error
+			if ok := errors.As(err, &e); ok {
+				if e.Code == 412 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+                    results <- 0
+				} else {
+                    println("error: ", err.Error())
+                    results <- hash
+				}
+            }
+        } else {
+            results <- hash
         }
     }
 }
 
-func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
-    batch_name string, client *storage.Client) int {
+func writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructure map[int]dataBuffer,
+    hashToServices map[int][]string, batch_name string, client *storage.Client) int {
     numJobs := len(hashToStructure)
     jobs := make(chan int, numJobs)
     results := make(chan int, numJobs)
 
-    numWorkers := 100
+    numWorkers := 50
 
     for w := 1; w <= numWorkers; w++ {
-        go writeHashExemplarsWorker(ctx, hashToStructure, batch_name, client, jobs, results)
+        go writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, client, jobs, results)
     }
 
     for hash, _ := range hashToStructure {
@@ -750,8 +780,33 @@ func writeHashExemplars(ctx context.Context, hashToStructure map[int]dataBuffer,
     close(jobs)
 
     totalNew := 0
+    objectsToWrite := make(map[string][]int)
     for a := 1; a <= numJobs; a++ {
-        totalNew += <-results
+        result := <-results
+        if result != 0 {
+            totalNew += 1
+            for _, service := range hashToServices[result] {
+                objectsToWrite[service] = append(objectsToWrite[service], result)
+            }
+        }
+    }
+
+    // Now create all the hash objects
+    hashNumJobs := len(objectsToWrite)
+    hashJobs := make(chan string, hashNumJobs)
+    hashResults := make(chan int, hashNumJobs)
+
+    numWorkers = 50
+
+    for w := 1; w <= numWorkers; w++ {
+        go writeMicroserviceToHashMappingWorker(ctx, client, batch_name, objectsToWrite, hashJobs, hashResults)
+    }
+    for service, _ := range objectsToWrite {
+        hashJobs <- service
+    }
+    close(hashJobs)
+    for a := 1; a <= hashNumJobs; a++ {
+        <-hashResults
     }
     return totalNew
 }
@@ -833,9 +888,9 @@ func computeHashesAndTraceStructToStorage(ctx context.Context, traces []TimeWith
     sendHashToTraceIDMapping(ctx, hashToTraceID, batch_name, client)
     //fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
 
-    //last_time := time.Now()
-    numHashExemplars := writeHashExemplars(ctx, hashToStructure, batch_name, client)
-    //fmt.Println("time to write hash exemplars: ", time.Since(last_time))
+    last_time := time.Now()
+    numHashExemplars := writeHashExemplarsAndHashByMicroservice(ctx, hashToStructure, hashToServices, batch_name, client)
+    fmt.Println("time to write hash exemplars: ", time.Since(last_time))
 
 	return nil, numHashExemplars
 }
@@ -953,7 +1008,18 @@ func process_file(filename string) Exempted {
     var wg sync.WaitGroup
 	j := 0
 
-    newHashesChannels := make(chan int, len(pdataTraces))
+	numBatches := 0
+	for j < len(pdataTraces) {
+		start := j
+		end := start + BatchSize
+		if end >= len(pdataTraces) {
+			end = len(pdataTraces)
+		}
+		numBatches += 1
+		j += BatchSize
+	}
+	j = 0
+    newHashesChannels := make(chan int, numBatches)
 
 	for j < len(pdataTraces) {
 		start := j
@@ -987,10 +1053,13 @@ func process_file(filename string) Exempted {
         }(ctx, pdataTraces, batch_name, client, start, end, &wg)
 		j += BatchSize
 	}
+	println("waiting on biggest waitgroup")
     wg.Wait()
+	println("done waiting on biggest waitgroup")
     close(newHashesChannels)
     totalNewHashes := 0
-    for i := 0; i< len(pdataTraces); i++ {
+    for i := 0; i< numBatches; i++ {
+	    println("total new hashes updated, i is ", i)
         totalNewHashes += <-newHashesChannels
     }
     println("total new hashes: ", totalNewHashes)
