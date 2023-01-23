@@ -12,34 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package googlecloudstorageexporter // import "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudstorageexporter"
+package googlecloudstorageexporter // import "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter"
 
 import (
-	"fmt"
 	"regexp"
 
-    "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
 var topicMatcher = regexp.MustCompile(`^projects/[a-z][a-z0-9\-]*/topics/`)
 
 type Config struct {
-	collector.Config `mapstructure:",squash"`
 	// Timeout for all API calls. If not set, defaults to 12 seconds.
 	exporterhelper.TimeoutSettings `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
 	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
 	exporterhelper.RetrySettings   `mapstructure:"retry_on_failure"`
 	// Google Cloud Project ID where the Pubsub client will connect to
 	ProjectID string `mapstructure:"project"`
-	// User agent that will be used by the Pubsub client to connect to the service
-	UserAgent string `mapstructure:"user_agent"`
-	// Override of the storage endpoint
-	Endpoint string `mapstructure:"endpoint"`
-	// Only has effect if Endpoint is not ""
-	Insecure bool `mapstructure:"insecure"`
-	// Compression of the payload (only gzip or is supported, no compression is the default)
-	Compression string `mapstructure:"compression"`
     // Suffix for buckets
 	BucketSuffix string `mapstructure:"bucket_suffix"`
     // Number of digits in the random hash
@@ -47,34 +36,6 @@ type Config struct {
 }
 
 func (config *Config) Validate() error {
-    if err := collector.ValidateConfig(config.Config); err != nil {
-		return fmt.Errorf("googlecloud exporter settings are invalid :%w", err)
-	}
-	return nil
-}
-
-func (config *Config) validate() error {
-	_, err := config.parseCompression()
-	if err != nil {
-		return err
-	}
     return nil
 }
 
-func (config *Config) parseCompression() (Compression, error) {
-	switch config.Compression {
-	case "gzip":
-		return GZip, nil
-	case "":
-		return Uncompressed, nil
-	}
-	return Uncompressed, fmt.Errorf("if specified, compression should be gzip ")
-}
-
-func (config *Config) validateForTrace() error {
-	err := config.validate()
-	if err != nil {
-		return err
-	}
-	return nil
-}

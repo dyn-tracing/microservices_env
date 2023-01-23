@@ -17,7 +17,6 @@ package googlecloudstorageexporter // import "github.com/open-telemetry/opentele
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -51,12 +50,10 @@ func ensureExporter(params exporter.CreateSettings, pCfg *Config) *storageExport
 	}
 	receiver = &storageExporter{
 		logger:           params.Logger,
-		userAgent:        strings.ReplaceAll(pCfg.UserAgent, "{{version}}", params.BuildInfo.Version),
 		ceSource:         fmt.Sprintf("/opentelemetry/collector/%s/%s", name, params.BuildInfo.Version),
 		config:           pCfg,
 		tracesMarshaler:  &ptrace.ProtoMarshaler{},
 	}
-	receiver.ceCompression, _ = pCfg.parseCompression()
 	exporters[pCfg] = receiver
 	return receiver
 }
@@ -64,7 +61,6 @@ func ensureExporter(params exporter.CreateSettings, pCfg *Config) *storageExport
 // createDefaultConfig creates the default configuration for exporter.
 func createDefaultConfig() component.Config {
 	return &Config{
-		UserAgent:        "opentelemetry-collector-contrib {{version}}",
 		TimeoutSettings:  exporterhelper.TimeoutSettings{Timeout: defaultTimeout},
         RetrySettings:    exporterhelper.NewDefaultRetrySettings(),
         QueueSettings:    exporterhelper.NewDefaultQueueSettings(),
