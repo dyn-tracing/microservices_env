@@ -26,6 +26,7 @@ import (
     "crypto/rand"
     "os"
     "math/big"
+    "sync"
 
     storage "cloud.google.com/go/storage"
     conventions "go.opentelemetry.io/collector/semconv/v1.5.0"
@@ -39,6 +40,8 @@ import (
 
 const name = "googlecloudstorage"
 const trace_bucket = "dyntraces"
+const HashesByServiceBucket = "hashes-by-service"
+const ListBucket = "list-hashes"
 const primeNumber = 97
 var hashNumber string
 
@@ -102,6 +105,33 @@ func serviceNameToBucketName(serviceName string, suffix string) string {
     return bucketID + suffix
 }
 
+func (ex *storageExporter) createBuckets(ctx context.Context) {
+    // check this
+    var wg sync.WaitGroup
+    wg.Add(5)
+	go func(ctx context.Context, wg *sync.WaitGroup){
+        ex.spanBucketExists(ctx, trace_bucket, false)
+        wg.Done()
+    }(ctx, &wg)
+	go func(ctx context.Context, wg *sync.WaitGroup){
+	    ex.spanBucketExists(ctx, "tracehashes", false)
+        wg.Done()
+    }(ctx, &wg)
+	go func(ctx context.Context, wg *sync.WaitGroup){
+        ex.spanBucketExists(ctx, "microservices", false)
+        wg.Done()
+    }(ctx, &wg)
+	go func(ctx context.Context, wg *sync.WaitGroup){
+        ex.spanBucketExists(ctx, ListBucket, false)
+        wg.Done()
+    }(ctx, &wg)
+	go func(ctx context.Context, wg *sync.WaitGroup){
+        ex.spanBucketExists(ctx, HashesByServiceBucket, false)
+        wg.Done()
+    }(ctx, &wg)
+
+    wg.Wait()
+}
 
 func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 	ctx, ex.cancel = context.WithCancel(ctx)
@@ -114,7 +144,7 @@ func (ex *storageExporter) start(ctx context.Context, _ component.Host) error {
 
 		ex.client = client
 	}
-    ex.spanBucketExists(ctx, trace_bucket, false)
+    ex.createBuckets(ctx)
     hashNumber = strconv.FormatUint(uint64(hash(os.Getenv("MY_POD_NAME"))), 10)[0:1]
     //seed := int64(hash(os.Getenv("MY_POD_NAME")))
     //ex.logger.Info("seed", zap.String("seed", string(seed)))
@@ -130,7 +160,7 @@ func (ex *storageExporter) shutdown(context.Context) error {
 	return nil
 }
 
-func (ex *storageExporter) hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
+func hashTrace(ctx context.Context, spans []spanStr) (map[*spanStr]int, int) {
     // Don't need to do all the computation if you just have one span
     spanToHash := make(map[*spanStr]int)
     if len(spans) == 1 {
@@ -317,6 +347,159 @@ func (ex *storageExporter) groupSpansByTraceKey(traces ptrace.Traces) map[pcommo
 	return idToSpans
 }
 
+func (ex *storageExporter) sendTraceIDsForHashWorker(ctx context.Context, hashToTraceID map[int][]string,
+    batch_name string, jobs <-chan int, results chan<- int) {
+	bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes", ex.config.BucketSuffix))
+
+    for hash := range jobs {
+        traces := hashToTraceID[hash]
+		traceIDs := dataBuffer{}
+		for i := 0; i < len(traces); i++ {
+			traceIDs.logEntry("%s", traces[i])
+		}
+		obj := bkt.Object(strconv.FormatUint(uint64(hash), 10) + "/" + batch_name)
+		w := obj.NewWriter(ctx)
+		if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
+			println(fmt.Errorf("failed creating the object: %w", err))
+			println("error: ", err.Error())
+		}
+		if err := w.Close(); err != nil {
+			println(fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+batch_name, err))
+			println("error: ", err.Error())
+		}
+        results <- 1
+    }
+}
+
+func (ex *storageExporter) writeMicroserviceToHashMappingWorker(ctx context.Context,
+    batch_name string, objectsToWrite map[string][]int, jobs <-chan string, results chan<- int) {
+
+	service_bkt := ex.client.Bucket(serviceNameToBucketName(HashesByServiceBucket, ex.config.BucketSuffix))
+	hashesBuf := dataBuffer{}
+    for service := range jobs {
+        for _, hash := range objectsToWrite[service] {
+		    hashesBuf.logEntry(strconv.FormatUint(uint64(hash), 10) + "\n")
+        }
+        service_obj := service_bkt.Object(service + "/" + batch_name)
+        service_writer := service_obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+        if _, err := service_writer.Write(hashesBuf.buf.Bytes()); err != nil {
+            println("error in writeMicroserviceToHashMappingWorker: ", err.Error())
+        }
+        if err := service_writer.Close(); err != nil {
+			var e *googleapi.Error
+			if ok := errors.As(err, &e); ok {
+				if e.Code == 412 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+				} else {
+                    println("error in closing in writeMicroserviceToHashMappingWorker: ", err.Error())
+				}
+            }
+        }
+        results <- 1
+    }
+}
+
+// Results here is either empty string (this isn't a new hash, someone else got
+// there first), or it is the string of the new hash
+func (ex *storageExporter) writeHashExemplarsWorker(ctx context.Context, hashToStructure map[int]dataBuffer,
+    hashToServices map[int][]string, batch_name string, jobs <-chan int, results chan<- int) {
+	list_bkt := ex.client.Bucket(serviceNameToBucketName(ListBucket, ex.config.BucketSuffix))
+    for hash := range jobs {
+        structure := hashToStructure[hash]
+		obj := list_bkt.Object(strconv.FormatUint(uint64(hash), 10))
+        w_list := obj.If(storage.Conditions{DoesNotExist: true}).NewWriter(ctx)
+        if _, err := w_list.Write(structure.buf.Bytes()); err != nil {
+            println(fmt.Errorf("failed creating the list object: %w", err))
+            println("error: ", err.Error())
+        }
+        if err := w_list.Close(); err != nil {
+			var e *googleapi.Error
+			if ok := errors.As(err, &e); ok {
+				if e.Code == 412 { // 409s mean some other thread created the bucket in the meantime;  ignore it
+                    results <- 0
+				} else {
+                    println("error: ", err.Error())
+                    results <- hash
+				}
+            }
+        } else {
+            results <- hash
+        }
+    }
+}
+
+func (ex *storageExporter) writeHashExemplarsAndHashByMicroservice(ctx context.Context, hashToStructure map[int]dataBuffer,
+    hashToServices map[int][]string, batch_name string) int {
+    numJobs := len(hashToStructure)
+    jobs := make(chan int, numJobs)
+    results := make(chan int, numJobs)
+
+    numWorkers := 50
+
+    for w := 1; w <= numWorkers; w++ {
+        go ex.writeHashExemplarsWorker(ctx, hashToStructure, hashToServices, batch_name, jobs, results)
+    }
+
+    for hash, _ := range hashToStructure {
+        jobs <- hash
+    }
+    close(jobs)
+
+    totalNew := 0
+    objectsToWrite := make(map[string][]int)
+    for a := 1; a <= numJobs; a++ {
+        result := <-results
+        if result != 0 {
+            totalNew += 1
+            for _, service := range hashToServices[result] {
+                objectsToWrite[service] = append(objectsToWrite[service], result)
+            }
+        }
+    }
+
+    // Now create all the hash objects
+    hashNumJobs := len(objectsToWrite)
+    hashJobs := make(chan string, hashNumJobs)
+    hashResults := make(chan int, hashNumJobs)
+
+    numWorkers = 50
+
+    for w := 1; w <= numWorkers; w++ {
+        go ex.writeMicroserviceToHashMappingWorker(ctx, batch_name, objectsToWrite, hashJobs, hashResults)
+    }
+    for service, _ := range objectsToWrite {
+        hashJobs <- service
+    }
+    close(hashJobs)
+    for a := 1; a <= hashNumJobs; a++ {
+        <-hashResults
+    }
+    return totalNew
+}
+
+func (ex *storageExporter) sendHashToTraceIDMapping(ctx context.Context, hashToTraceID map[int][]string, batch_name string) {
+
+    numJobs := len(hashToTraceID)
+    jobs := make(chan int, numJobs)
+    results := make(chan int, numJobs)
+
+    numWorkers := 30
+
+    for w := 1; w <= numWorkers; w++ {
+        go ex.sendTraceIDsForHashWorker(ctx, hashToTraceID, batch_name, jobs, results)
+    }
+    //computed_time := time.Now()
+
+    for hash, _ := range hashToTraceID {
+        jobs <- hash
+    }
+    close(jobs)
+
+    for a := 1; a <= numJobs; a++ {
+        <-results
+    }
+    //fmt.Println("time for send hash to trace ID mapping to actually run: ", time.Since(computed_time))
+}
+
 // Stores 2 things in GCS:
 // 1. Trace ID to hash and struct
 // 2. Hash to trace ID
@@ -325,6 +508,8 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pcommon.TraceID
     ctx := context.Background()
     traceStructBuf := dataBuffer{}
 	hashToTraceID := make(map[int][]string)
+	hashToStructure := make(map[int]dataBuffer)
+    hashToServices := make(map[int][]string)
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
         traceStructBuf.logEntry("Trace ID: %s:", traceID.String())
@@ -337,44 +522,61 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pcommon.TraceID
                id: spanID,
                service: resource})
         }
-        hashmap, hash := ex.hashTrace(ctx, sp)
-        for i := 0; i< len(sp); i++ {
-            traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
-                strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
-        }
-        hashToTraceID[hash] = append(hashToTraceID[hash], traceID.String())
-    }
-    // 2. Put the trace structure buffer in storage
-    trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket, ex.config.BucketSuffix))
-    ex.spanBucketExists(ctx, trace_bucket, false)
+        hashmap, hash := hashTrace(ctx, sp)
+		// If the hash to structure has not yet been filled, fill it.
+		hashFilled := true
+		structBuf := dataBuffer{}
+		if _, ok := hashToStructure[hash]; !ok {
+			hashFilled = false
+			structBuf.logEntry("Trace ID: %s:", traceID.String())
+		}
+		for i := 0; i < len(sp); i++ {
+			traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
+				strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
+			if !hashFilled {
+				structBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
+					strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
+			}
 
-    trace_obj := trace_bkt.Object(objectName)
-    w_trace := trace_obj.NewWriter(ctx)
-    if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
-        return fmt.Errorf("failed creating the trace object: %w", err)
-    }
-    if err := w_trace.Close(); err != nil {
-        return fmt.Errorf("failed closing the trace object %w", err)
-    }
+		}
+		hashToTraceID[hash] = append(hashToTraceID[hash], traceID.String())
+		if !hashFilled {
+			hashToStructure[hash] = structBuf
+            var services []string
+            for i :=0; i < len(sp); i++ {
+                services = append(services, sp[i].service)
+            }
+            hashToServices[hash] = services
+		}
+	}
+    //fmt.Println("time to compute all hashes: ", time.Since(start_time))
+    //computed_time := time.Now()
 
-    // 3. Put the hash to trace ID mapping in storage
-    bkt := ex.client.Bucket(serviceNameToBucketName("tracehashes", ex.config.BucketSuffix))
-    ex.spanBucketExists(ctx, "tracehashes", false)
-    for hash, traces := range hashToTraceID {
-        traceIDs := dataBuffer{}
-        for i :=0; i<len(traces); i++ {
-            traceIDs.logEntry("%s", traces[i])
-        }
-        obj := bkt.Object(strconv.FormatUint(uint64(hash), 10)+"/"+objectName)
-        w := obj.NewWriter(ctx)
-        if _, err := w.Write(traceIDs.buf.Bytes()); err != nil {
-            return fmt.Errorf("failed creating the object: %w", err)
-        }
-        if err := w.Close(); err != nil {
-            return fmt.Errorf("failed closing the hash object in bucket %s: %w", strconv.FormatUint(uint64(hash), 10)+"/"+objectName, err)
-        }
-    }
-    return nil
+
+	// 2. Put the trace structure buffer in storage
+	trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket, ex.config.BucketSuffix))
+
+	trace_obj := trace_bkt.Object(objectName)
+	w_trace := trace_obj.NewWriter(ctx)
+	if _, err := w_trace.Write([]byte(traceStructBuf.buf.Bytes())); err != nil {
+		return fmt.Errorf("failed creating the trace object: %w", err)
+	}
+	if err := w_trace.Close(); err != nil {
+		return fmt.Errorf("failed closing the trace object %w", err)
+	}
+    //fmt.Println("time to send trace struct buffer: ", time.Since(computed_time))
+
+    //before_hash_mapping_time := time.Now()
+
+	// 3. Put the hash to trace ID mapping in storage
+    ex.sendHashToTraceIDMapping(ctx, hashToTraceID, objectName)
+    //fmt.Println("time to send hash to trace ID mapping: ", time.Since(before_hash_mapping_time))
+
+    last_time := time.Now()
+    _ = ex.writeHashExemplarsAndHashByMicroservice(ctx, hashToStructure, hashToServices, objectName)
+    fmt.Println("time to write hash exemplars: ", time.Since(last_time))
+
+	return nil
 }
 
 // A helper function that stores spans according to their resource.
@@ -395,17 +597,10 @@ func (ex *storageExporter) storeSpans(traces ptrace.Traces, objectName string) e
             }
 
             // 2. Determine the bucket of the new object, and make sure it's a bucket that exists
-            bucketName := serviceNameToBucketName(sn.AsString(), ex.config.BucketSuffix)
+            bucketName := serviceNameToBucketName("microservices", ex.config.BucketSuffix)
             bkt := ex.client.Bucket(bucketName)
-            ret := ex.spanBucketExists(ctx, sn.AsString(), true)
-            if ret != nil {
-                ex.logger.Info("sn.AsString is ", zap.String("sn string", sn.AsString()))
-                ex.logger.Info("bucket name is ", zap.String("bucket name ", bucketName))
-                ex.logger.Info("span bucket exists error ", zap.Error(ret))
-                return ret
-            }
             // 3. Send the data under that bucket/object name to storage
-            obj := bkt.Object(objectName)
+            obj := bkt.Object(sn.AsString() + ex.config.BucketSuffix + "/" + objectName)
             writer := obj.NewWriter(ctx)
             if _, err := writer.Write(buffer); err != nil {
                 return fmt.Errorf("failed creating the span object: %w", err)
