@@ -1,10 +1,21 @@
 import csv
 
 bytes_per_csv = []
-for i in range(1, 16):
-    with open(str(i)+'alibaba.txt', 'r') as alibaba_file:
+messed_up = [22, 30]
+for i in range(1, 145):
+    if i not in messed_up:
+        with open(str(i)+'alibaba.txt', 'r') as alibaba_file:
+            contents = alibaba_file.read()
+            location_total_traces = contents.find("Total bytes: ") + len("Total bytes:  ")
+            end_total_traces = contents.find("\n", location_total_traces)
+            total_bytes = int(contents[location_total_traces:end_total_traces])
+            bytes_per_csv.append(total_bytes)
+
+for i in range(len(messed_up)):
+    with open(str(messed_up[i])+'alibaba.txt', 'r') as alibaba_file:
         contents = alibaba_file.read()
-        location_total_traces = contents.find("Total bytes: ") + len("Total bytes: ")
+        location_total_traces = contents.find("Total bytes: ") + len("Total bytes:  ")
+
         end_total_traces = contents.find("\n", location_total_traces)
         total_bytes = int(contents[location_total_traces:end_total_traces])
         bytes_per_csv.append(total_bytes)

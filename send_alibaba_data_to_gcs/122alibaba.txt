@@ -1,0 +1,8 @@
+total traces:  132669
+exempted traces (cyclic):  6965
+exempted traces (frag):  23458
+done creating buckets
+failed closing the span object:  googleapi: got HTTP response code 503 with body: Service Unavailable
+when we are writing object  35-1707027276-1707061436  in bucket  microservices-quest-batched-145csv
+total new hashes:  6449
+Total bytes:  329057242

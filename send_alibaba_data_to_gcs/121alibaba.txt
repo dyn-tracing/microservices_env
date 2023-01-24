@@ -1,0 +1,26 @@
+total traces:  124426
+exempted traces (cyclic):  4953
+exempted traces (frag):  21529
+done creating buckets
+failed closing the span object:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+when we are writing object  11-1706834290-1706869418  in bucket  microservices-quest-batched-145csv
+(0xef1d20,0xc139298040)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+(0xef1d20,0xc0744db780)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+failed closing the span object:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+when we are writing object  31-1706904018-1706938732  in bucket  microservices-quest-batched-145csv
+(0xef1d20,0xc138a35600)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+(0xef1d20,0xc078e42a20)
+error:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+(0xef1d20,0xc139bd83a0)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+(0xef1d20,0xc138f10160)
+error:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+(0xef1d20,0xc07f9ab5a0)
+error:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+failed closing the span object:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+when we are writing object  61-1706763010-1706798440  in bucket  microservices-quest-batched-145csv
+total new hashes:  5996
+Total bytes:  308190172

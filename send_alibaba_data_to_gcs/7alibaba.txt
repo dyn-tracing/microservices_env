@@ -1,1 +1,6 @@
-2022/12/15 03:51:56 open ./MSCallGraph_7.csv: no such file or directory
+total traces:  135438
+exempted traces (cyclic):  9692
+exempted traces (frag):  18464
+done creating buckets
+total new hashes:  12728
+Total bytes:  419452187

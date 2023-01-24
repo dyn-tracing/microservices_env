@@ -1,0 +1,16 @@
+total traces:  175078
+exempted traces (cyclic):  13816
+exempted traces (frag):  26136
+done creating buckets
+failed closing the span object:  googleapi: Error 504: , gatewayTimeout
+when we are writing object  84-1695895710-1695922667  in bucket  microservices-quest-batched-145csv
+(0xef1d20,0xc11804c100)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+(0xef1d20,0xc117a717e0)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+failed closing the span object:  googleapi: got HTTP response code 503 with body: Service Unavailable
+when we are writing object  97-1695841062-1695868399  in bucket  microservices-quest-batched-145csv
+(0xef1d20,0xc115341280)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+total new hashes:  9229
+Total bytes:  410268027
