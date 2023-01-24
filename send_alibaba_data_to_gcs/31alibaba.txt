@@ -1,0 +1,6 @@
+total traces:  148977
+exempted traces (cyclic):  9921
+exempted traces (frag):  16856
+done creating buckets
+total new hashes:  10867
+Total bytes:  430732345

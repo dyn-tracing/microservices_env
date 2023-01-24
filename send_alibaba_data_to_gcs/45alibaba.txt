@@ -1,0 +1,18 @@
+total traces:  152992
+exempted traces (cyclic):  10801
+exempted traces (frag):  16491
+done creating buckets
+(0xef1d20,0xc0baafc1e0)
+error:  googleapi: Error 504: , gatewayTimeout
+(0xef1d20,0xc0b9768ec0)
+error:  googleapi: Error 504: , gatewayTimeout
+(0xef1d20,0xc0ba124500)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+(0xef1d20,0xc153bcb660)
+error:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+(0xef1d20,0xc0baeb7a60)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+(0xef1d20,0xc0ba6d7cc0)
+error:  googleapi: Error 503: We encountered an internal error. Please try again., backendError
+total new hashes:  10961
+Total bytes:  441906265

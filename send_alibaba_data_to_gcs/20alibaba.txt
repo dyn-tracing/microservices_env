@@ -1,0 +1,8 @@
+total traces:  139637
+exempted traces (cyclic):  10223
+exempted traces (frag):  17923
+done creating buckets
+(0xef1d20,0xc0ddfa5660)
+error:  googleapi: got HTTP response code 503 with body: Service Unavailable
+total new hashes:  11833
+Total bytes:  431987394
