@@ -4,7 +4,7 @@ receivers:
 processors:
 
 exporters:
-  loadbalancing:
+  loadbalancerhttp:
     protocol:
       # the OTLP exporter configuration. "endpoint" values will be ignored
       otlp:
@@ -16,7 +16,7 @@ exporters:
         hostnames:
         - endpoint-1 # assumes 4317 as the default port
         - endpoint-2:55678
-  loadbalancing/2:
+  loadbalancerhttp/2:
     protocol:
       otlp:
 
@@ -24,7 +24,7 @@ exporters:
     resolver:
       dns:
         hostname: service-1 # assumes 4317 as the default port for the resolved IP addresses
-  loadbalancing/3:
+  loadbalancerhttp/3:
     protocol:
       otlp:
 

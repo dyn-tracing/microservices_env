@@ -15,6 +15,7 @@ for i in range(len(messed_up)):
     with open(str(messed_up[i])+'alibaba.txt', 'r') as alibaba_file:
         contents = alibaba_file.read()
         location_total_traces = contents.find("Total bytes: ") + len("Total bytes:  ")
+
         end_total_traces = contents.find("\n", location_total_traces)
         total_bytes = int(contents[location_total_traces:end_total_traces])
         bytes_per_csv.append(total_bytes)

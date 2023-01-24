@@ -327,10 +327,10 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pcommon.TraceID
 	hashToTraceID := make(map[int][]string)
     for traceID, spans := range traceIDToSpans {
         var sp []spanStr
-        traceStructBuf.logEntry("Trace ID: %s:", traceID.HexString())
+        traceStructBuf.logEntry("Trace ID: %s:", traceID.String())
         for i := 0; i< len(spans); i++ {
-            parent := spans[i].span.ParentSpanID().HexString()
-            spanID := spans[i].span.SpanID().HexString()
+            parent := spans[i].span.ParentSpanID().String()
+            spanID := spans[i].span.SpanID().String()
             resource := spans[i].resource
             sp = append(sp, spanStr{
                parent: parent,
@@ -342,7 +342,7 @@ func (ex *storageExporter) storeHashAndStruct(traceIDToSpans map[pcommon.TraceID
             traceStructBuf.logEntry("%s:%s:%s:%s", sp[i].parent, sp[i].id, sp[i].service,
                 strconv.FormatUint(uint64(hashmap[&sp[i]]), 10))
         }
-        hashToTraceID[hash] = append(hashToTraceID[hash], traceID.HexString())
+        hashToTraceID[hash] = append(hashToTraceID[hash], traceID.String())
     }
     // 2. Put the trace structure buffer in storage
     trace_bkt := ex.client.Bucket(serviceNameToBucketName(trace_bucket, ex.config.BucketSuffix))
