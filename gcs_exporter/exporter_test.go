@@ -39,8 +39,6 @@ func TestExporterDefaultSettings(t *testing.T) {
 		userAgent:    "test-user-agent",
 
 		config: &Config{
-			Endpoint:  "127.0.0.1",
-			Insecure:  true,
 			ProjectID: "my-project",
 			TimeoutSettings: exporterhelper.TimeoutSettings{
 				Timeout: 12 * time.Second,

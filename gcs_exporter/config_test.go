@@ -15,59 +15,49 @@
 package googlecloudstorageexporter
 
 import (
-	"path"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.opentelemetry.io/collector/service/servicetest"
 )
 
 func TestLoadConfig(t *testing.T) {
-	factories, err := componenttest.NopFactories()
-	assert.NoError(t, err)
-
+	cm, err := confmaptest.LoadConf(filepath.Join(".", "testdata", "config.yaml"))
+	require.NoError(t, err)
 	factory := NewFactory()
-	factories.Exporters[config.Type(typeStr)] = factory
-	cfg, err := servicetest.LoadConfig(
-		path.Join(".", "testdata", "config.yaml"), factories,
-	)
-	assert.NoError(t, err)
-	assert.NotNil(t, cfg)
+	cfg := factory.CreateDefaultConfig()
 
-	assert.Equal(t, len(cfg.Exporters), 2)
+	sub, err := cm.Sub(component.NewIDWithName(typeStr, "customname").String())
+	require.NoError(t, err)
+	require.NoError(t, component.UnmarshalConfig(sub, cfg))
 
 	defaultConfig := factory.CreateDefaultConfig().(*Config)
-	assert.Equal(t, cfg.Exporters[config.NewComponentID(typeStr)], defaultConfig)
+	assert.Equal(t, cfg, defaultConfig)
+
+	sub, err = cm.Sub(component.NewIDWithName(typeStr, "").String())
+	require.NoError(t, err)
+	require.NoError(t, component.UnmarshalConfig(sub, cfg))
 
 	customConfig := factory.CreateDefaultConfig().(*Config)
-	customConfig.SetIDName("customname")
 
 	customConfig.ProjectID = "my-project"
-	customConfig.UserAgent = "opentelemetry-collector-contrib {{version}}"
-	customConfig.Endpoint = "test-endpoint"
+	customConfig.TimeoutSettings = exporterhelper.TimeoutSettings{
+		Timeout: 5 * time.Second,
+	}
+    customConfig.RetrySettings = exporterhelper.NewDefaultRetrySettings()
+    customConfig.RetrySettings.InitialInterval = time.Second
+    customConfig.RetrySettings.Enabled = true
+    customConfig.QueueSettings = exporterhelper.NewDefaultQueueSettings()
+	customConfig.QueueSettings.Enabled = true
+	customConfig.QueueSettings.NumConsumers = 100
+	customConfig.QueueSettings.QueueSize = 1000
     customConfig.BucketSuffix = "snicket4"
     customConfig.NumOfDigitsForRandomHash = "2"
-	customConfig.Insecure = true
-	customConfig.TimeoutSettings = exporterhelper.TimeoutSettings{
-		Timeout: 20 * time.Second,
-	}
-	customConfig.Compression = "gzip"
-	assert.Equal(t, cfg.Exporters[config.NewComponentIDWithName(typeStr, "customname")], customConfig)
+	assert.Equal(t, cfg, customConfig)
 }
 
-func TestCompressionConfigValidation(t *testing.T) {
-	factory := NewFactory()
-	c := factory.CreateDefaultConfig().(*Config)
-	c.Compression = "xxx"
-	assert.Error(t, c.validate())
-	c.Compression = "gzip"
-	assert.NoError(t, c.validate())
-	c.Compression = "none"
-	assert.Error(t, c.validate())
-	c.Compression = ""
-	assert.NoError(t, c.validate())
-}
