@@ -17,7 +17,6 @@ package loadbalancerhttp // import "github.com/open-telemetry/opentelemetry-coll
 import (
     "time"
 
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
 )
 
@@ -30,7 +29,6 @@ const (
 
 // Config defines configuration for the exporter.
 type Config struct {
-	config.ExporterSettings `mapstructure:",squash"`
 	Protocol                Protocol         `mapstructure:"protocol"`
 	Resolver                ResolverSettings `mapstructure:"resolver"`
     RoutingKey              string           `mapstructure:"routing_key"`

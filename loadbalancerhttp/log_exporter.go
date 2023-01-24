@@ -34,7 +34,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
 )
 
-var _ component.LogsExporter = (*logExporterImp)(nil)
+var _ exporter.Logs = (*logExporterImp)(nil)
 
 type logExporterImp struct {
 	loadBalancer loadBalancer
@@ -100,9 +100,9 @@ func (e *logExporterImp) consumeLog(ctx context.Context, ld plog.Logs) error {
 		return err
 	}
 
-	le, ok := exp.(component.LogsExporter)
+	le, ok := exp.(exporter.Logs)
 	if !ok {
-		expectType := (*component.LogsExporter)(nil)
+		expectType := (*exporter.Logs)(nil)
 		return fmt.Errorf("unable to export logs, unexpected exporter type: expected %T but got %T", expectType, exp)
 	}
 

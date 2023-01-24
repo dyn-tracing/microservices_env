@@ -24,7 +24,6 @@ import (
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
@@ -35,7 +34,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
 )
 
-var _ component.TracesExporter = (*traceExporterImp)(nil)
+var _ exporter.Traces = (*traceExporterImp)(nil)
 
 var (
 	errNoTracesInBatch = errors.New("no traces were found in the batch")
@@ -71,7 +70,6 @@ func newTracesExporter(params exporter.CreateSettings, cfg component.Config, log
 
 func buildExporterConfig(cfg *Config, endpoint string) otlphttpexporter.Config {
 	oCfg := cfg.Protocol.OTLP
-	oCfg.ExporterSettings = config.NewExporterSettings(component.NewID("otlp"))
 	oCfg.Endpoint = endpoint
 	return oCfg
 }
@@ -133,10 +131,9 @@ func (e *traceExporterImp) ConsumeTraces(ctx context.Context, td ptrace.Traces) 
 			return err
 		}
 
-		te, ok := exp.(component.TracesExporter)
+		te, ok := exp.(exporter.Traces)
 		if !ok {
-			expectType := (*component.TracesExporter)(nil)
-			return fmt.Errorf("expected %T but got %T", expectType, exp)
+            return fmt.Errorf("unable to export traces, unexpected exporter type: expected exporter.Traces but got %T", exp)
 		}
 
 		start := time.Now()
@@ -172,9 +169,9 @@ func (e *traceExporterImp) consumeTrace(ctx context.Context, td ptrace.Traces) e
 			return err
 		}
 
-		te, ok := exp.(component.TracesExporter)
+		te, ok := exp.(exporter.Traces)
 		if !ok {
-			expectType := (*component.TracesExporter)(nil)
+			expectType := (*exporter.Traces)(nil)
 			return fmt.Errorf("expected %T but got %T", expectType, exp)
 		}
 
