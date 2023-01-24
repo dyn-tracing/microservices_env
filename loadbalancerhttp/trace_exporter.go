@@ -24,8 +24,8 @@ import (
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
     "go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/multierr"
@@ -34,7 +34,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal"
 )
 
-var _ component.TracesExporter = (*traceExporterImp)(nil)
+var _ exporter.Traces = (*traceExporterImp)(nil)
 
 var (
 	errNoTracesInBatch = errors.New("no traces were found in the batch")
@@ -51,10 +51,10 @@ type traceExporterImp struct {
 }
 
 // Create new traces exporter
-func newTracesExporter(params component.ExporterCreateSettings, cfg component.ExporterConfig, logger *zap.Logger) (*traceExporterImp, error) {
+func newTracesExporter(params exporter.CreateSettings, cfg component.Config, logger *zap.Logger) (*traceExporterImp, error) {
 	exporterFactory := otlphttpexporter.NewFactory()
 
-	lb, err := newLoadBalancer(params, cfg, func(ctx context.Context, endpoint string) (component.Exporter, error) {
+	lb, err := newLoadBalancer(params, cfg, func(ctx context.Context, endpoint string) (component.Component, error) {
 		oCfg := buildExporterConfig(cfg.(*Config), endpoint)
 		return exporterFactory.CreateTracesExporter(ctx, params, &oCfg)
 	})
@@ -70,7 +70,6 @@ func newTracesExporter(params component.ExporterCreateSettings, cfg component.Ex
 
 func buildExporterConfig(cfg *Config, endpoint string) otlphttpexporter.Config {
 	oCfg := cfg.Protocol.OTLP
-	oCfg.ExporterSettings = config.NewExporterSettings(component.NewID("otlp"))
 	oCfg.Endpoint = endpoint
 	return oCfg
 }
@@ -132,10 +131,9 @@ func (e *traceExporterImp) ConsumeTraces(ctx context.Context, td ptrace.Traces) 
 			return err
 		}
 
-		te, ok := exp.(component.TracesExporter)
+		te, ok := exp.(exporter.Traces)
 		if !ok {
-			expectType := (*component.TracesExporter)(nil)
-			return fmt.Errorf("expected %T but got %T", expectType, exp)
+            return fmt.Errorf("unable to export traces, unexpected exporter type: expected exporter.Traces but got %T", exp)
 		}
 
 		start := time.Now()
@@ -159,7 +157,7 @@ func (e *traceExporterImp) ConsumeTraces(ctx context.Context, td ptrace.Traces) 
 }
 
 func (e *traceExporterImp) consumeTrace(ctx context.Context, td ptrace.Traces) error {
-    var exp component.Exporter
+    var exp component.Component
 	routingIds, err := routingIdentifiersFromTraces(td, e.routingKey)
 	if err != nil {
 		return err
@@ -171,9 +169,9 @@ func (e *traceExporterImp) consumeTrace(ctx context.Context, td ptrace.Traces) e
 			return err
 		}
 
-		te, ok := exp.(component.TracesExporter)
+		te, ok := exp.(exporter.Traces)
 		if !ok {
-			expectType := (*component.TracesExporter)(nil)
+			expectType := (*exporter.Traces)(nil)
 			return fmt.Errorf("expected %T but got %T", expectType, exp)
 		}
 

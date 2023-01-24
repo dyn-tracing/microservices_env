@@ -17,11 +17,10 @@ package googlecloudstorageexporter // import "github.com/open-telemetry/opentele
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config"
+    "go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/consumer"
     "go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -35,38 +34,33 @@ const (
 )
 
 // NewFactory creates a factory for Google Cloud Storage exporter.
-func NewFactory() component.ExporterFactory {
-	return component.NewExporterFactory(
+func NewFactory() exporter.Factory {
+	return exporter.NewFactory(
 		typeStr,
 		createDefaultConfig,
-        component.WithTracesExporter(createTracesExporter, stability))
+        exporter.WithTraces(createTracesExporter, stability))
 }
 
 var exporters = map[*Config]*storageExporter{}
 
-func ensureExporter(params component.ExporterCreateSettings, pCfg *Config) *storageExporter {
+func ensureExporter(params exporter.CreateSettings, pCfg *Config) *storageExporter {
 	receiver := exporters[pCfg]
 	if receiver != nil {
 		return receiver
 	}
 	receiver = &storageExporter{
-		instanceName:     pCfg.ID().Name(),
 		logger:           params.Logger,
-		userAgent:        strings.ReplaceAll(pCfg.UserAgent, "{{version}}", params.BuildInfo.Version),
 		ceSource:         fmt.Sprintf("/opentelemetry/collector/%s/%s", name, params.BuildInfo.Version),
 		config:           pCfg,
 		tracesMarshaler:  &ptrace.ProtoMarshaler{},
 	}
-	receiver.ceCompression, _ = pCfg.parseCompression()
 	exporters[pCfg] = receiver
 	return receiver
 }
 
 // createDefaultConfig creates the default configuration for exporter.
-func createDefaultConfig() component.ExporterConfig {
+func createDefaultConfig() component.Config {
 	return &Config{
-		ExporterSettings: config.NewExporterSettings(component.NewID(typeStr)),
-		UserAgent:        "opentelemetry-collector-contrib {{version}}",
 		TimeoutSettings:  exporterhelper.TimeoutSettings{Timeout: defaultTimeout},
         RetrySettings:    exporterhelper.NewDefaultRetrySettings(),
         QueueSettings:    exporterhelper.NewDefaultQueueSettings(),
@@ -75,15 +69,15 @@ func createDefaultConfig() component.ExporterConfig {
 
 func createTracesExporter(
 	ctx context.Context,
-	set component.ExporterCreateSettings,
-	cfg component.ExporterConfig) (component.TracesExporter, error) {
+	params exporter.CreateSettings,
+	cfg component.Config) (exporter.Traces, error) {
 
 	pCfg := cfg.(*Config)
-	storageExporter := ensureExporter(set, pCfg)
+	storageExporter := ensureExporter(params, pCfg)
 
 	return exporterhelper.NewTracesExporter(
         ctx,
-		set,
+		params,
         cfg,
 		storageExporter.consumeTraces,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
