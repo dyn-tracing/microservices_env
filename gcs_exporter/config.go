@@ -15,12 +15,8 @@
 package googlecloudstorageexporter // import "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter"
 
 import (
-	"regexp"
-
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
-
-var topicMatcher = regexp.MustCompile(`^projects/[a-z][a-z0-9\-]*/topics/`)
 
 type Config struct {
 	// Timeout for all API calls. If not set, defaults to 12 seconds.

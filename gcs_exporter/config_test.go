@@ -27,7 +27,7 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
+	cm, err := confmaptest.LoadConf(filepath.Join(".", "testdata", "config.yaml"))
 	require.NoError(t, err)
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
