@@ -49,6 +49,13 @@ func TestLoadConfig(t *testing.T) {
 	customConfig.TimeoutSettings = exporterhelper.TimeoutSettings{
 		Timeout: 5 * time.Second,
 	}
+    customConfig.RetrySettings = exporterhelper.NewDefaultRetrySettings()
+    customConfig.RetrySettings.InitialInterval = time.Second
+    customConfig.RetrySettings.Enabled = true
+    customConfig.QueueSettings = exporterhelper.NewDefaultQueueSettings()
+	customConfig.QueueSettings.Enabled = true
+	customConfig.QueueSettings.NumConsumers = 100
+	customConfig.QueueSettings.QueueSize = 1000
     customConfig.BucketSuffix = "snicket4"
     customConfig.NumOfDigitsForRandomHash = "2"
 	assert.Equal(t, cfg, customConfig)

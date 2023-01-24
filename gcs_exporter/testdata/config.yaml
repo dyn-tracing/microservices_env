@@ -1,28 +1,13 @@
-receivers:
-  nop:
-
-processors:
-  nop:
-
-exporters:
-  googlecloudstorage/customname:
-  googlecloudstorage:
-    project: my-project
-    timeout: 5s
-    retry_on_failure:
-      enabled: true
-      initial_interval: 1s
-    sending_queue:
-      enabled: true
-      num_consumers: 100
-      queue_size: 1000
-    bucket_suffix: snicket4
-    num_of_digits_for_random_hash: 2
-
-service:
-  pipelines:
-    traces:
-        receivers: [nop]
-        processors: [nop]
-        exporters: [googlecloudstorage, googlecloudstorage/customname]
-
+googlecloudstorage/customname:
+googlecloudstorage:
+  project: my-project
+  timeout: 5s
+  retry_on_failure:
+    enabled: true
+    initial_interval: 1s
+  sending_queue:
+    enabled: true
+    num_consumers: 100
+    queue_size: 1000
+  bucket_suffix: snicket4
+  num_of_digits_for_random_hash: 2
